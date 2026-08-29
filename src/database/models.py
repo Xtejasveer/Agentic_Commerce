@@ -50,7 +50,7 @@ class OrderRecord(Base):
     shipping_address = Column(Text, nullable=False)
     status = Column(String(50), nullable=False, default="pending")
     razorpay_order_id = Column(String, nullable=True)
-    razorpay_payement_id = Column(String, nullable=True)
+    razorpay_payment_id = Column(String, nullable=True)
     payment_link_url = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -59,7 +59,7 @@ class AuditLogRecord(Base):
     """Append-only audit trail - every agent action is logged here.
     Never updated, only inserted."""
 
-    __table_name__= "audit_log"
+    __tablename__= "audit_log"
     id = Column(String, primary_key=True, default=generate_uuid)
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable = False)
     event_type = Column(String(50), nullable = False)
@@ -71,4 +71,3 @@ class AuditLogRecord(Base):
     razorpay_status = Column(String, nullable=True)
     details = Column(JSON, nullable=True)
     error_message = Column(Text, nullable=True)
-    
