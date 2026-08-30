@@ -10,6 +10,8 @@ from typing import Optional
 from src.database.session import SessionLocal
 from src.catalog import service as catalog_service
 from src.schemas.product import SearchResult, Product
+from src.policy.engine import policy_engine
+from src.schemas.mandate import MandateCheckRequest
 
 # Server Initialization
 
@@ -112,5 +114,34 @@ def get_product_details(
                 "error" : f"Product '{product_id}' not found in catalog.",
             }
         return {"found" : True, "product" : product.model_dump()}
+    finally:
+        db.close()
+
+@mcp.tool()
+def validate_purchase_mandate(
+    agent_id : str = Field(..., description="Your agent ID registered with this merchant."),
+    product_id: str = Field(..., description="The product_id you intend to purchase"),
+    product_category: str = Field(..., description="The category fo the product (from get_product_details)"),
+    quantity: int = Field(1, ge=1, description = "Number of units you want to buy"),
+    total_amount_inr: float = Field(..., description="Total cost in INR (price x quantity)"),
+) -> dict:
+    """
+    Check whether your agent mandate authorizes a specific purchase.
+    Always call this before execute_purchase.
+
+    Returns a full decision an explainable trace of every policy check
+    performed - whether or rejected, you will know exactly why.
+    """
+    db = SessionLocal()
+    try:
+        request = MandateCheckRequest(
+            agent_id = agent_id,
+            product_id=product_id,
+            product_category=product_category,
+            quantity=quantity,
+            total_amount_inr=total_amount_inr,
+        )
+        result = policy_engine.validate(db=db, request=request)
+        return result.model_dump()
     finally:
         db.close()

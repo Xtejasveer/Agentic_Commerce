@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func, date
+from sqlalchemy import func, Date
 from src.database.vector import vector_db
 from src.database.models import ProductRecord, AuditLogRecord
 from src.schemas.product import Product, SearchResult
