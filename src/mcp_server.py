@@ -12,7 +12,8 @@ from src.catalog import service as catalog_service
 from src.schemas.product import SearchResult, Product
 from src.policy.engine import policy_engine
 from src.schemas.mandate import MandateCheckRequest
-
+from src.payments.service import execute_purchase as payment_service_execute
+from src.schemas.order import PurchaseRequest
 # Server Initialization
 
 mcp = FastMCP(
@@ -142,6 +143,33 @@ def validate_purchase_mandate(
             total_amount_inr=total_amount_inr,
         )
         result = policy_engine.validate(db=db, request=request)
+        return result.model_dump()
+    finally:
+        db.close()
+
+@mcp.tool()
+def execute_purchase(
+    agent_id: str = Field(..., description="Your agent ID"),
+    product_id: str = Field(..., description="The product_id to purchase (from search results)"),
+    quantity: int = Field(1, ge=1, description="Number of units to buy"),
+    shipping_address: str = Field(..., description="Delivery address (minimum 10 characters)"),
+) -> dict:
+    """
+    Execute a complete purchase — policy check, stock reservation, and Razorpay payment link.
+    IMPORTANT: Call validate_purchase_mandate first to confirm approval.
+    This tool will also re-validate internally as a safety measure.
+    On success: returns a payment_link_url the user can open to complete payment.
+    On failure: returns success=False with a clear error_message explaining why.
+    """
+    db = SessionLocal()
+    try:
+        request = PurchaseRequest(
+            agent_id=agent_id,
+            product_id=product_id,
+            quantity=quantity,
+            shipping_address=shipping_address,
+        )
+        result = payment_service_execute(db=db, request=request)
         return result.model_dump()
     finally:
         db.close()
