@@ -42,9 +42,9 @@ class MandateCheckResult(BaseModel):
     decision_trace: list[PolicyCheck] = Field(
         ..., description="Ordered list of every check performed with pass/fail"
     )
-    remaining_daily_budget_inr = Optional[float] = Field(
+    remaining_daily_budget_inr :Optional[float] = Field(
         None, description="How much daily budget remains after this transaction"
     )
-    requires_huamn_approval: bool = Field(False)
+    requires_human_approval: bool = Field(False)
     warnings: list[str] = Field(default_factory=list)
     

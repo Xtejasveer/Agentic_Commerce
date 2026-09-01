@@ -38,7 +38,7 @@ def create_order(
         "notes" : notes or {},
     }
     try:
-        order = _client.order.create(date = payload)
+        order = _client.order.create(data = payload)
         logger.info(f"Razorpay order created: {order['id']} for ₹{amount_inr}")
         return order
     except razorpay.errors.BadRequestError as e:
@@ -81,7 +81,7 @@ def create_payment_link(
             "sms":False,
             "email":False,
         },
-        "remainder_enable": False,
+        "reminder_enable": False,
     }
 
     if callback_url:

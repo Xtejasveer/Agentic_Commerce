@@ -68,8 +68,8 @@ def get_product(db:Session, product_id: str) -> Product | None:
         return None
     return _record_to_product(record)
 
-def check_stock(db: Session, product_id: str, quantity: str) -> bool:
-    """Record True of sufficient stock is available."""
+def check_stock(db: Session, product_id: str, quantity: int) -> bool:
+    """Record True if sufficient stock is available."""
     record = db.query(ProductRecord).filter(
         ProductRecord.product_id == product_id
     ).first()

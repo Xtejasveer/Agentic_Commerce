@@ -180,7 +180,7 @@ class PolicyEngine:
             trace.append(PolicyCheck(
                 check="human_approval_gate",
                 passed = True,
-                detail = f"No human approval reuired for this amount."
+                detail = f"No human approval required for this amount."
             ))
 
         # All checks passed - Approve
@@ -201,7 +201,7 @@ class PolicyEngine:
             reason = "APPROVED",
             decision_trace = trace,
             remaining_daily_budget_inr = remaining_after,
-            requires_huamn_approval=requires_human,
+            requires_human_approval=requires_human,
             warnings=warnings,
         )
 
@@ -232,7 +232,7 @@ class PolicyEngine:
             reason = reason,
             decision_trace = trace,
             remaining_daily_budget_inr = None,
-            requires_huamn_approval=False,
+            requires_human_approval=False,
             warnings=warnings,
         )
 

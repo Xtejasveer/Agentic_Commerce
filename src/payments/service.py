@@ -66,7 +66,7 @@ def execute_purchase(
 
         if not mandate_result.approved:
             return PurchaseResult(
-                sucess = False,
+                success = False,
                 status = OrderStatus.FAILED,
                 error_message = f"Policy rejected: {mandate_result.reason}."
                                 f"{mandate_result.decision_trace[-1].detail}",

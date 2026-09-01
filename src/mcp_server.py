@@ -123,8 +123,8 @@ def validate_purchase_mandate(
     agent_id : str = Field(..., description="Your agent ID registered with this merchant."),
     product_id: str = Field(..., description="The product_id you intend to purchase"),
     product_category: str = Field(..., description="The category fo the product (from get_product_details)"),
-    quantity: int = Field(1, ge=1, description = "Number of units you want to buy"),
     total_amount_inr: float = Field(..., description="Total cost in INR (price x quantity)"),
+    quantity: int = Field(1, ge=1, description = "Number of units you want to buy"),
 ) -> dict:
     """
     Check whether your agent mandate authorizes a specific purchase.
@@ -151,8 +151,8 @@ def validate_purchase_mandate(
 def execute_purchase(
     agent_id: str = Field(..., description="Your agent ID"),
     product_id: str = Field(..., description="The product_id to purchase (from search results)"),
-    quantity: int = Field(1, ge=1, description="Number of units to buy"),
     shipping_address: str = Field(..., description="Delivery address (minimum 10 characters)"),
+    quantity: int = Field(1, ge=1, description="Number of units to buy"),
 ) -> dict:
     """
     Execute a complete purchase — policy check, stock reservation, and Razorpay payment link.
@@ -173,3 +173,7 @@ def execute_purchase(
         return result.model_dump()
     finally:
         db.close()
+
+if __name__ == "__main__":
+    # Run in stdio mode — used when spawned as subprocess by the buyer agent
+    mcp.run(transport="stdio")
