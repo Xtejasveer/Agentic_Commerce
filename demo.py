@@ -29,6 +29,7 @@ SCENARIOS = [
         "description": "agent-buyer-01 (₹5k limit) buys a fast charger under ₹2,000",
         "request": "I need a good fast charger under 2000 rupees",
         "agent_id": "agent-buyer-01",
+        "api_key": "key-buyer-01-secret",
         "expect": "success",
         "style": "green",
     },
@@ -37,6 +38,7 @@ SCENARIOS = [
         "description": "agent-buyer-02 (₹2k limit) tries to buy ₹2,499 earbuds",
         "request": "Buy me the OnePlus Nord Buds 2 earbuds",
         "agent_id": "agent-buyer-02",
+        "api_key": "key-buyer-02-secret",
         "expect": "rejected",
         "style": "red",
     },
@@ -45,6 +47,7 @@ SCENARIOS = [
         "description": "agent-buyer-01 tries to buy the Samsung charger (stock = 0)",
         "request": "Buy the Samsung 45W Super Fast Charger",
         "agent_id": "agent-buyer-01",
+        "api_key": "key-buyer-01-secret",
         "expect": "rejected",
         "style": "yellow",
     },
@@ -63,6 +66,7 @@ async def run_scenario(scenario: dict) -> dict:
         final_state = await run_buyer_agent(
             user_request=scenario["request"],
             agent_id=scenario["agent_id"],
+            api_key=scenario["api_key"]
         )
 
     # Show step-by-step agent messages

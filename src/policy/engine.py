@@ -5,7 +5,7 @@ Every purchase attempt must pass through here before any money moves.
 """
 from sqlalchemy.orm import Session
 from sqlalchemy import func, cast, Date
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timezone, timedelta
 from src.database.models import AgentMandateRecord, OrderRecord, AuditLogRecord
 from src.schemas.mandate import MandateCheckRequest, MandateCheckResult, PolicyCheck
 from src.schemas.audit import AuditEventType
@@ -28,23 +28,45 @@ class PolicyEngine:
         trace: list[PolicyCheck] =[]
         warnings: list[str] = []
 
-        ## Check-1 : Agent Exists
+        ## Check-1 : Identity and Auth check
         mandate = db.query(AgentMandateRecord).filter(
             AgentMandateRecord.agent_id == request.agent_id
         ).first()
 
-        if not mandate:
+        if not mandate or mandate.api_key != request.api_key:
             trace.append(PolicyCheck(
-                check = "agent_exists",
+                check = "agent_auth",
                 passed = False,
-                detail = f"No mandate registered for agent '{request.agent_id}'."
+                datail = f"Agent '{request.agent_id}' not found or invalid API key."
             ))
-            return self._reject("AGENT_NOT_FOUND", trace, warnings, db, request)
+            return self._reject("UNAUTHORIZED", trace, warnings, db, request)
 
         trace.append(PolicyCheck(
-            check = "agent_exists",
+            check = "agent_auth",
             passed = True,
-            detail = f"Agent '{request.agent_id}' found"
+            detail = f"Agent '{request.agent_id}' authenticated."
+        ))
+        # 2. Idempotency check (Prevent duplicate purchases within 5 mins)
+        five_mins_ago = datetime.now(timezone.utc) - timedelta(minutes=5)
+        recent_txn = db.query(AuditLogRecord).filter(
+            AuditLogRecord.agent_id == request.agent_id,
+            AuditLogRecord.product_id == request.product_id,
+            AuditLogRecord.event_type == AuditEventType.POLICY_APPROVED.value,
+            AuditLogRecord.timestamp >= five_mins_ago
+        ).first()
+
+        if recent_txn:
+            trace.append(PolicyCheck(
+                check = "idempotency_check",
+                passed = False,
+                detail = "Duplicate purchase detected. You already bought this item less than 5 minutes ago."
+            ))
+            return self._reject("IDEMPOTENCY_BLOCK", trace, warnings, db, request)
+
+        trace.append(PolicyCheck(
+            check = "idemptency_check",
+            passed = True,
+            detail = "No duplicate recent purchases found."
         ))
 
         ## Check-2 : Mandate Active

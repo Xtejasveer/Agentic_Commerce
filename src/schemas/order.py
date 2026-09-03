@@ -12,6 +12,7 @@ class OrderStatus(str, Enum):
 class PurchaseRequest(BaseModel):
     """An AI agent's request to purchase a product"""
     agent_id: str = Field(..., description="The buyer agent's id")
+    api_key: str = Field(..., description="The buyer agent's API key")
     product_id: str = Field(..., description="SKU of the product to purchase")
     quantity: int = Field(1, ge=1, description="Number of units to buy")
     shipping_address : str = Field(..., min_length = 10, description="Delivery address")

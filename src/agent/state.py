@@ -8,6 +8,7 @@ class AgentState(TypedDict):
     #Input
     user_request : str
     agent_id: str
+    api_key: str
     shipping_address: str
 
     # Intermediate state

@@ -57,6 +57,7 @@ def execute_purchase(
 
         mandate_request = MandateCheckRequest(
             agent_id = request.agent_id,
+            api_key = request.api_key,
             product_id=request.product_id,
             product_category=product.category,
             quantity = request.quantity,

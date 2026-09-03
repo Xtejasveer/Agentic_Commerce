@@ -23,6 +23,7 @@ class AgentMandate(BaseModel):
 class MandateCheckRequest(BaseModel):
     """Input to the policy engine for a pre-purchase check."""
     agent_id: str
+    api_key: str
     product_id: str
     product_category: str
     quantity: int = Field(..., ge=1)

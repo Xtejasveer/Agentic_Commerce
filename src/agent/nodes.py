@@ -275,6 +275,7 @@ def make_validate_node(tools: list):
         # Call the policy engine via MCP tool
         raw_mandate = await validate_tool.ainvoke({
             "agent_id": state["agent_id"],
+            "agent_api_key" : state["api_key"],
             "product_id": product_id,
             "product_category": category,
             "total_amount_inr": price_inr,
@@ -327,6 +328,7 @@ def make_purchase_node(tools: list):
 
         raw_result = await purchase_tool.ainvoke({
             "agent_id": state["agent_id"],
+            "agent_api_key":state["api_key"],
             "product_id": pid,
             "shipping_address": state.get(
                 "shipping_address",

@@ -69,6 +69,7 @@ async def run_buyer_agent(
     user_request: str,
     agent_id: str = "agent-buyer-01",
     shipping_address: str = "123 Demo Street, Mumbai, Maharashtra 400001",
+    api_key: str = "",
 ) -> AgentState:
     """
     Run the full buyer agent workflow for a natural language purchase request.
@@ -99,6 +100,7 @@ async def run_buyer_agent(
         "user_request": user_request,
         "agent_id": agent_id,
         "shipping_address": shipping_address,
+        "api_key": api_key,
         "search_results": [],
         "selected_product": None,
         "mandate_result": None,

@@ -121,6 +121,7 @@ def get_product_details(
 @mcp.tool()
 def validate_purchase_mandate(
     agent_id : str = Field(..., description="Your agent ID registered with this merchant."),
+    agent_api_key: str = Field(..., description="The secret API key of your agent."),
     product_id: str = Field(..., description="The product_id you intend to purchase"),
     product_category: str = Field(..., description="The category fo the product (from get_product_details)"),
     total_amount_inr: float = Field(..., description="Total cost in INR (price x quantity)"),
@@ -137,6 +138,7 @@ def validate_purchase_mandate(
     try:
         request = MandateCheckRequest(
             agent_id = agent_id,
+            api_key=agent_api_key,
             product_id=product_id,
             product_category=product_category,
             quantity=quantity,
@@ -150,6 +152,7 @@ def validate_purchase_mandate(
 @mcp.tool()
 def execute_purchase(
     agent_id: str = Field(..., description="Your agent ID"),
+    agent_api_key: str = Field(..., description="The secret API key of your agent."),
     product_id: str = Field(..., description="The product_id to purchase (from search results)"),
     shipping_address: str = Field(..., description="Delivery address (minimum 10 characters)"),
     quantity: int = Field(1, ge=1, description="Number of units to buy"),
@@ -165,6 +168,7 @@ def execute_purchase(
     try:
         request = PurchaseRequest(
             agent_id=agent_id,
+            api_key = agent_api_key,
             product_id=product_id,
             quantity=quantity,
             shipping_address=shipping_address,
