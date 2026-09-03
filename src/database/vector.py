@@ -21,7 +21,8 @@ class VectorDatabase:
         metadatas = [{
             "name": p["name"],
             "price_inr": p["price_inr"],
-            "stock_quantity": p["stock_quantity"]
+            "stock_quantity": p["stock_quantity"],
+            "category": p["category"]
         } for p in products]
 
         self.collection.upsert(

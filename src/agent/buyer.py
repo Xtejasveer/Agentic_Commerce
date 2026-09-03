@@ -3,6 +3,7 @@ LangGraph Buyer Agent — compiles the StateGraph and runs purchase workflows.
 """
 
 import os
+import sys
 import logging
 from langchain_openai import ChatOpenAI
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -79,7 +80,7 @@ async def run_buyer_agent(
     mcp_config = {
         "merchant": {
             "transport": "stdio",
-            "command": "python",
+            "command": sys.executable,
             "args": ["src/mcp_server.py"],
             "env": {**os.environ, "PYTHONPATH": os.getcwd()},
         }

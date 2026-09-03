@@ -54,7 +54,7 @@ def create_payment_link(
         reference_id: str,
         customer_name: str = "AI_Buyer",
         customer_email: str = "buyer@agenticsystem.ai",
-        customer_contact: str = "+919999999999",
+        customer_contact: str = "+918287433395",
         callback_url: str | None = None
 ) -> dict:
     """
