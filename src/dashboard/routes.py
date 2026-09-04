@@ -16,12 +16,51 @@ from src.database.session import get_db
 from src.database.models import AuditLogRecord, OrderRecord, AgentMandateRecord, ProductRecord
 from src.payments.razorpay_client import verify_webhook_signature
 from src.config import settings
+from pydantic import BaseModel
+from src.agent.buyer import run_buyer_agent
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # In-memory queue for SSE - audit events are pushed here and streamed to clients
 _sse_queue: asyncio.Queue = asyncio.Queue()
+
+class ChatRequest(BaseModel):
+    agent_id: str
+    message: str
+
+@router.post("/chat")
+async def chat_endpoint(request: ChatRequest):
+    """
+    Runs the LangGraph buyer agent in the background and returns its response.
+    """
+    try:
+        # Determine appropriate API key for the requested agent
+        api_key = "key-buyer-01-secret" if request.agent_id == "agent-buyer-01" else "key-buyer-02-secret"
+        
+        # Run agent
+        state = await run_buyer_agent(
+            user_request=request.message,
+            agent_id=request.agent_id,
+            api_key=api_key
+        )
+        
+        # Check for error or final response
+        if state.get("error"):
+            return {"response": f"❌ Purchase could not be completed.\n\nReason: {state['error']}"}
+        
+        final_msg = state.get("final_response")
+        if not final_msg:
+            # Fallback to last message
+            if state.get("messages"):
+                final_msg = state["messages"][-1].content
+            else:
+                final_msg = "Task completed."
+                
+        return {"response": final_msg}
+    except Exception as e:
+        logger.error(f"Chat error: {e}")
+        return {"response": f"❌ Error running agent: {str(e)}"}
 
 ## Health 
 @router.get("/health")
@@ -72,17 +111,30 @@ async def stream_audit_events(request: Request):
 
     async def event_generator():
         yield "data: {\"type\": \"connected\", \"message\": \"Audit stream live\"}\n\n"
-
+        
+        from datetime import datetime, timezone
+        from src.database.session import SessionLocal
+        
+        last_timestamp = datetime.now(timezone.utc)
+        
         while True:
-            # Check if client disconnected
             if await request.is_disconnected():
                 break
             try:
-                # Wait for 5 seconds for a new event
-                event = await asyncio.wait_for(_sse_queue.get(), timeout=5)
-                yield f"data {json.dumps(event)}\n\n"
-            except asyncio.TimeoutError:
-                yield "data: {\"type\": \"heartbeat\"}\n\n"
+                await asyncio.sleep(0.5)
+                with SessionLocal() as db:
+                    new_records = db.query(AuditLogRecord).filter(AuditLogRecord.timestamp > last_timestamp).order_by(AuditLogRecord.timestamp.asc()).all()
+                    if new_records:
+                        for r in new_records:
+                            event = _format_audit(r)
+                            yield f"data: {json.dumps(event)}\n\n"
+                            last_timestamp = r.timestamp
+                    else:
+                        # Send heartbeat occasionally
+                        yield "data: {\"type\": \"heartbeat\"}\n\n"
+            except Exception as e:
+                logger.error(f"SSE Error: {e}")
+                await asyncio.sleep(1)
 
     return StreamingResponse(
         event_generator(),

@@ -34,31 +34,40 @@ def get_llm() -> ChatOpenAI:
 
 
 def _route_after_validate(state: AgentState) -> str:
-    """After policy check: go to purchase if approved, else skip to respond."""
-    return "purchase" if state.get("current_step") == "purchase" else "respond"
+    """After policy check: go to upsell eval if approved, else skip to respond."""
+    return "evaluate_upsell" if state.get("current_step") == "purchase" else "respond"
 
 
 def build_graph(tools: list, llm: ChatOpenAI):
     """Compile the StateGraph with all nodes and routing logic."""
+    from src.agent.nodes import make_evaluate_upsell_node
+    
     graph = StateGraph(AgentState)
 
     graph.add_node("search",   make_search_node(tools, llm))
     graph.add_node("evaluate", make_evaluate_node(llm))
     graph.add_node("validate", make_validate_node(tools))
+    graph.add_node("evaluate_upsell", make_evaluate_upsell_node(tools, llm))
     graph.add_node("purchase", make_purchase_node(tools))
     graph.add_node("respond",  make_respond_node())
 
     graph.set_entry_point("search")
 
     graph.add_edge("search",   "evaluate")
-    graph.add_edge("evaluate", "validate")
+    
+    graph.add_conditional_edges(
+        "evaluate",
+        lambda state: "validate" if state.get("selected_product", {}).get("product_id") else "respond",
+        {"validate": "validate", "respond": "respond"},
+    )
 
     graph.add_conditional_edges(
         "validate",
         _route_after_validate,
-        {"purchase": "purchase", "respond": "respond"},
+        {"evaluate_upsell": "evaluate_upsell", "respond": "respond"},
     )
 
+    graph.add_edge("evaluate_upsell", "purchase")
     graph.add_edge("purchase", "respond")
     graph.add_edge("respond",  END)
 

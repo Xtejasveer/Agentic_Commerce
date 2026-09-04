@@ -14,6 +14,7 @@ class PurchaseRequest(BaseModel):
     agent_id: str = Field(..., description="The buyer agent's id")
     api_key: str = Field(..., description="The buyer agent's API key")
     product_id: str = Field(..., description="SKU of the product to purchase")
+    addon_product_id: Optional[str] = Field(None, description="Optional bundled addon SKU")
     quantity: int = Field(1, ge=1, description="Number of units to buy")
     shipping_address : str = Field(..., min_length = 10, description="Delivery address")
 

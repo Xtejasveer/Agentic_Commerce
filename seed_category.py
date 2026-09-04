@@ -32,6 +32,12 @@ def create_tables():
 def seed_products(db):
     console.print("\n [bold cyan] Seeding products into PostgreSQL... [/bold cyan]")
 
+    from src.database.models import OrderRecord
+    from src.database.models import AuditLogRecord
+
+    # Clear dependents first to avoid foreign key constraints
+    db.query(AuditLogRecord).delete()
+    db.query(OrderRecord).delete()
     db.query(ProductRecord).delete()
     db.commit()
 
@@ -77,7 +83,7 @@ def seed_mandates(db):
             api_key="key-buyer-02-secret",
             max_single_txn_inr=2000.0,
             max_daily_spend_inr=5000.0,
-            allowed_categories=["chargers", "cables"],
+            allowed_categories=["chargers"],
             requires_approval_above_inr=None,
             is_active=True,
         ),

@@ -14,6 +14,7 @@ from src.policy.engine import policy_engine
 from src.schemas.mandate import MandateCheckRequest
 from src.payments.service import execute_purchase as payment_service_execute
 from src.schemas.order import PurchaseRequest
+from src.schemas.audit import AuditEventType
 # Server Initialization
 
 mcp = FastMCP(
@@ -89,6 +90,11 @@ def search_products(
             category=category,
             limit = limit,
         )
+        catalog_service.log_audit_event(db, {
+            "event_type": AuditEventType.SEARCH,
+            "agent_id": "System",
+            "details": {"query": query, "found": result.total_found, "category": category}
+        })
         return {
             "query":result.query,
             "total_found":result.total_found,
@@ -117,6 +123,30 @@ def get_product_details(
         return {"found" : True, "product" : product.model_dump()}
     finally:
         db.close()
+@mcp.tool()
+def suggest_addon(
+    product_id: str = Field(..., description="The primary product ID you are buying"),
+) -> dict:
+    """
+    Get a relevant accessory or addon for a product to upsell the human.
+    """
+    db = SessionLocal()
+    try:
+        from src.catalog.service import get_product, log_audit_event
+        # Simple hardcoded upsell logic: If buyin"g a charger, pitch a cable.
+        if product_id in ["prod-001", "prod-002","prod-003","prod-004", "prod-005"]: 
+            addon = get_product(db, "prod-006") # The cable
+            if addon:
+                return {
+                    "has_addon": True,
+                    "addon_product_id": addon.product_id,
+                    "name": addon.name,
+                    "price_inr": addon.price_inr,
+                    "merchant_pitch": "10% discount on this premium braided cable when bundled with a charger today! Highly recommended to maximize charging speed."
+                }
+        return {"has_addon": False}
+    finally:
+        db.close()
 
 @mcp.tool()
 def validate_purchase_mandate(
@@ -125,6 +155,7 @@ def validate_purchase_mandate(
     product_id: str = Field(..., description="The product_id you intend to purchase"),
     product_category: str = Field(..., description="The category fo the product (from get_product_details)"),
     total_amount_inr: float = Field(..., description="Total cost in INR (price x quantity)"),
+    addon_product_id: Optional[str] = Field(None, description="Optional addon product ID to bundle"),
     quantity: int = Field(1, ge=1, description = "Number of units you want to buy"),
 ) -> dict:
     """
@@ -140,6 +171,7 @@ def validate_purchase_mandate(
             agent_id = agent_id,
             api_key=agent_api_key,
             product_id=product_id,
+            addon_product_id=addon_product_id,
             product_category=product_category,
             quantity=quantity,
             total_amount_inr=total_amount_inr,
@@ -155,6 +187,7 @@ def execute_purchase(
     agent_api_key: str = Field(..., description="The secret API key of your agent."),
     product_id: str = Field(..., description="The product_id to purchase (from search results)"),
     shipping_address: str = Field(..., description="Delivery address (minimum 10 characters)"),
+    addon_product_id: Optional[str] = Field(None, description="Optional addon product ID to bundle"),
     quantity: int = Field(1, ge=1, description="Number of units to buy"),
 ) -> dict:
     """
@@ -170,6 +203,7 @@ def execute_purchase(
             agent_id=agent_id,
             api_key = agent_api_key,
             product_id=product_id,
+            addon_product_id=addon_product_id,
             quantity=quantity,
             shipping_address=shipping_address,
         )

@@ -31,16 +31,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(router, prefix= "/api")
+from fastapi import Request
+from fastapi.templating import Jinja2Templates
+import os
+
+# Set up templates directory
+current_dir = os.path.dirname(os.path.abspath(__file__))
+templates = Jinja2Templates(directory=os.path.join(current_dir, "templates"))
+
+app.include_router(router, prefix="/api")
 
 @app.get("/")
-def root():
-    return {
-        "service" :"Agentic Commerce Merchant Dashboard",
-        "docs" : "/docs",
-        "audit_trail" : "/api/audit",
-        "live_stream" : "/api/audit/stream",
-        "orders": "/api/orders",
-        "mandates":"/api/mandates",
-        "health":"/api/health", 
-    }
+def root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})

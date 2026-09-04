@@ -51,6 +51,15 @@ SCENARIOS = [
         "expect": "rejected",
         "style": "yellow",
     },
+    {
+        "title": "Scenario 4 — Bot-to-Bot Negotiation (Auto-Declined Upsell)",
+        "description": "agent-buyer-02 (chargers ONLY) buys a charger. Merchant pitches a cable. Agent evaluates & declines due to category mandate.",
+        "request": "Buy the Anker 65W charger",
+        "agent_id": "agent-buyer-02",
+        "api_key": "key-buyer-02-secret",
+        "expect": "success_no_upsell",
+        "style": "blue",
+    },
 ]
 
 

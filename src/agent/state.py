@@ -14,6 +14,8 @@ class AgentState(TypedDict):
     # Intermediate state
     search_results:list
     selected_product: Optional[dict]
+    suggested_addon: Optional[dict]
+    addon_decision: Optional[str]
     mandate_result: Optional[dict]
     purchase_result: Optional[dict]
 

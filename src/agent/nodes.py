@@ -112,8 +112,8 @@ def make_search_node(tools: list, llm):
         extraction_prompt = (
             f'Extract search parameters from: "{user_req}"\n\n'
             "Return ONLY a JSON object with these optional fields:\n"
-            '{"query": "what to search for", "max_price": 2000, "category": "chargers"}\n'
-            "Omit fields not mentioned. Return only JSON."
+            '{"query": "search terms", "max_price": float (if mentioned), "category": "category if explicitly mentioned"}\n'
+            "Omit fields not mentioned. For example, if no category is explicitly specified, do not include the category field. Return only JSON."
         )
         response = await llm.ainvoke([HumanMessage(content=extraction_prompt)])
 
@@ -187,14 +187,15 @@ def make_evaluate_node(llm):
 
         products_text = json.dumps(products, indent=2)
         evaluation_prompt = (
-            f'User wants: "{state["user_request"]}"\n\n'
+            f'User request: "{state["user_request"]}"\n\n'
             f"Available products:\n{products_text}\n\n"
-            "Pick the BEST product. Consider:\n"
+            "If the user is explicitly asking to BUY or PURCHASE something, pick the BEST product. Consider:\n"
             "1. How well it matches the request\n"
             "2. Price (prefer cheapest that meets requirements)\n"
             "3. Stock (stock_quantity must be > 0)\n\n"
+            "If the user is just asking a question (e.g., 'What can I buy?', 'list items') and NOT explicitly asking to purchase an item, DO NOT select a product.\n\n"
             "Return ONLY a JSON object:\n"
-            '{"product_id": "...", "name": "...", "price_inr": 0, "reason": "one sentence"}\n'
+            '{"product_id": "prod-123" or null, "name": "...", "price_inr": 0, "reason": "Explain why you selected it, or if null, summarize the available products."}\n'
         )
 
         response = await llm.ainvoke([HumanMessage(content=evaluation_prompt)])
@@ -215,6 +216,16 @@ def make_evaluate_node(llm):
         # Use "or 0" because .get default only applies when key is MISSING, not when value is None
         price = selected.get("price_inr") or 0
         name = selected.get("name") or "Unknown"
+        product_id = selected.get("product_id")
+
+        if not product_id:
+            logger.info(f"[evaluate_node] No product selected for purchase. Reason: {selected.get('reason')}")
+            return {
+                "selected_product": selected,
+                "current_step": "inform",
+                "final_response": selected.get("reason", "I can help you find products, but I didn't detect a purchase request."),
+                "messages": [AIMessage(content=selected.get("reason", "I can help you find products."))]
+            }
 
         logger.info(f"[evaluate_node] Selected: {name} at ₹{price}")
 
@@ -231,6 +242,113 @@ def make_evaluate_node(llm):
 
     return evaluate_node
 
+
+def make_evaluate_upsell_node(tools: list, llm):
+    suggest_tool = _get_tool(tools, "suggest_addon")
+    validate_tool = _get_tool(tools, "validate_purchase_mandate")
+    details_tool = _get_tool(tools, "get_product_details")
+
+    async def evaluate_upsell_node(state: AgentState) -> dict:
+        product = state.get("selected_product", {})
+        if not product:
+            return {}
+
+        logger.info(f"[evaluate_upsell_node] Checking for addons for {product.get('product_id')}")
+
+        raw_addon = await suggest_tool.ainvoke({"product_id": product.get("product_id")})
+        addon_data = _parse_mcp_response(raw_addon)
+        
+        if not isinstance(addon_data, dict) or not addon_data.get("has_addon"):
+            return {}
+
+        logger.info(f"[evaluate_upsell_node] Merchant suggested addon: {addon_data.get('addon_product_id')}")
+
+        # Check combined cart policy
+        raw_details = await details_tool.ainvoke({"product_id": product.get("product_id")})
+        details = _parse_mcp_response(raw_details)
+        if not isinstance(details, dict): details = {}
+        
+        full_product = details.get("product", {})
+        product_category = full_product.get("category", "unknown")
+
+        combined_price = product.get("price_inr", 0.0) + addon_data.get("price_inr", 0.0)
+
+        raw_val = await validate_tool.ainvoke({
+            "agent_id": state["agent_id"],
+            "agent_api_key": state.get("api_key", ""),
+            "product_id": product.get("product_id"),
+            "addon_product_id": addon_data.get("addon_product_id"),
+            "product_category": product_category,
+            "total_amount_inr": combined_price,
+            "quantity": 1
+        })
+        val_result = _parse_mcp_response(raw_val)
+        if not isinstance(val_result, dict): val_result = {}
+
+        is_approved = val_result.get("approved", False)
+        reason = val_result.get("reason", "Unknown")
+        trace = val_result.get("decision_trace", [])
+
+        # Ask LLM to evaluate the upsell negotiation
+        prompt = f"""
+You are {state['agent_id']}. You selected '{product.get('name')}' for ₹{product.get('price_inr')} to fulfill: "{state['user_request']}"
+The merchant is offering an upsell: '{addon_data.get('name')}' for ₹{addon_data.get('price_inr')}.
+Merchant Pitch: "{addon_data.get('merchant_pitch')}"
+
+You ran a policy check on the COMBINED cart (Primary + Addon). 
+Policy Result: {"APPROVED" if is_approved else "REJECTED"}
+Reason: {reason}
+Trace details: {trace}
+
+Decide whether to accept the upsell. 
+If Policy Result is REJECTED, you MUST reject the upsell and narrate exactly why based on the trace (e.g. category restriction or budget).
+If Policy Result is APPROVED, you can accept it if it makes logical sense for the user.
+
+Output JSON:
+{{
+  "decision": "accept" or "reject",
+  "narration": "A one sentence explanation of your choice (e.g. 'I will accept the cable bundle as it fits the budget' OR 'I must decline the cable because my mandate only allows chargers.')."
+}}
+"""
+        response = await llm.ainvoke([HumanMessage(content=prompt)])
+        
+        # Parse JSON
+        decision_data = {"decision": "reject", "narration": "Failed to parse decision."}
+        import json
+        content = response.content.strip()
+        if content.startswith("```json"): content = content[7:-3]
+        try:
+            decision_data = json.loads(content)
+        except Exception:
+            pass
+
+        decision = decision_data.get("decision", "reject")
+        narration = decision_data.get("narration", "")
+
+        try:
+            from src.database.session import SessionLocal
+            from src.catalog.service import log_audit_event
+            from src.schemas.audit import AuditEventType
+            
+            db = SessionLocal()
+            try:
+                log_audit_event(db, {
+                    "event_type": AuditEventType.UPSELL_ACCEPTED if decision == "accept" else AuditEventType.UPSELL_REJECTED,
+                    "agent_id": state["agent_id"],
+                    "product_id": addon_data.get("addon_product_id"),
+                    "details": {"narration": narration}
+                })
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Failed to log upsell event: {e}")
+
+        return {
+            "suggested_addon": addon_data if decision == "accept" else None,
+            "addon_decision": decision,
+            "messages": [AIMessage(content=f"🛍️ Upsell Evaluation: {narration}")]
+        }
+    return evaluate_upsell_node
 
 def make_validate_node(tools: list):
     """
@@ -326,15 +444,19 @@ def make_purchase_node(tools: list):
         pid = product.get("product_id")
         logger.info(f"[purchase_node] Executing purchase: {pid}")
 
+        addon = state.get("suggested_addon")
+        addon_id = addon.get("addon_product_id") if addon else None
+
         raw_result = await purchase_tool.ainvoke({
             "agent_id": state["agent_id"],
-            "agent_api_key":state["api_key"],
+            "agent_api_key": state.get("api_key", ""),
             "product_id": pid,
+            "addon_product_id": addon_id,
             "shipping_address": state.get(
                 "shipping_address",
-                "123 Demo Street, Mumbai, Maharashtra 400001"
+                "123 Default Tech Park, BLR"
             ),
-            "quantity": 1,
+            "quantity": 1
         })
 
         result = _parse_mcp_response(raw_result)
@@ -368,7 +490,10 @@ def make_respond_node():
 
     async def respond_node(state: AgentState) -> dict:
         step = state.get("current_step")
-        if step == "done":
+        if step == "inform":
+            # The agent is just answering a question, return the final response
+            return {"final_response": state.get("final_response", "I can help you find products.")}
+        elif step == "done":
             result = state.get("purchase_result", {})
             response = (
                 f"✅ Order placed successfully!\n\n"

@@ -31,7 +31,7 @@ def run_mcp():
 
 def run_seed():
     import subprocess
-    subprocess.run([sys.executable, "seed_catagory.py"])
+    subprocess.run([sys.executable, "seed_category.py"])
 
 if __name__ == "__main__":
     command = sys.argv[1] if len(sys.argv) >1 else "dashboard"

@@ -54,11 +54,18 @@ def execute_purchase(
             raise ValueError(f"Product '{request.product_id}' not found")
 
         total_amount = product.price_inr * request.quantity
+        
+        addon = None
+        if request.addon_product_id:
+            addon = get_product(db, request.addon_product_id)
+            if addon:
+                total_amount += (addon.price_inr * request.quantity)
 
         mandate_request = MandateCheckRequest(
             agent_id = request.agent_id,
             api_key = request.api_key,
             product_id=request.product_id,
+            addon_product_id=request.addon_product_id,
             product_category=product.category,
             quantity = request.quantity,
             total_amount_inr = total_amount,
@@ -80,6 +87,16 @@ def execute_purchase(
                 f"Stock reservation failed for '{request.product_id}'."
                 f"Item may have sold out between validation and purchase."
             )
+            
+        addon_reserved = False
+        if request.addon_product_id:
+            addon_reserved = reserve_stock(db, request.addon_product_id, request.quantity)
+            if not addon_reserved:
+                # Rollback primary
+                from src.catalog.service import release_stock
+                release_stock(db, request.product_id, request.quantity)
+                raise ValueError(f"Stock reservation failed for addon '{request.addon_product_id}'.")
+                
         stock_reserved = True
 
         log_audit_event(db, {
@@ -87,7 +104,7 @@ def execute_purchase(
             "agent_id" : request.agent_id,
             "product_id" : request.product_id,
             "amount_inr" : total_amount,
-            "details" : {"quantity" : request.quantity, "order_id" : order_id}
+            "details" : {"quantity" : request.quantity, "order_id" : order_id, "addon_id": request.addon_product_id}
         })
 
         # Step-3: Create internal order record
@@ -98,7 +115,7 @@ def execute_purchase(
             quantity = request.quantity,
             total_amount_inr = total_amount,
             shipping_address = request.shipping_address,
-            status = OrderStatus.PENDING,
+            status = OrderStatus.PENDING
         )
         db.add(order_record)
         db.commit()
@@ -152,6 +169,10 @@ def execute_purchase(
             f"Razorpay: {razorpay_order_id}, agent: {request.agent_id}"
         )
 
+        display_name = product.name
+        if addon:
+            display_name = f"{product.name} (w/ {addon.name})"
+
         return PurchaseResult(
             success= True,
             order_id=order_id,
@@ -159,19 +180,22 @@ def execute_purchase(
             payment_link_url=payment_link_url,
             status = OrderStatus.PAYMENT_INITIATED,
             total_amount_inr=total_amount,
-            product_name=product.name,
+            product_name=display_name,
             quantity=request.quantity,
             audit_id = audit_id
         )
     except Exception as e:
-        # Rollback - release stock if it was reserved
-        if stock_reserved and product:
+        if stock_reserved:
+            from src.catalog.service import release_stock
             release_stock(db, request.product_id, request.quantity)
+            if request.addon_product_id:
+                release_stock(db, request.addon_product_id, request.quantity)
+                
             log_audit_event(db, {
-                "event_type" : AuditEventType.STOCK_RELEASED,
+                "event_type": AuditEventType.STOCK_RELEASED,
                 "agent_id": request.agent_id,
                 "product_id" : request.product_id,
-                "details" : {"reason" : "payment_failure_rollback", "error": str(e)}
+                "details": {"reason" : "Purchase flow failed, rolling back stock", "addon_id": request.addon_product_id}
             })
         log_audit_event(db, {
             "event_type": AuditEventType.PAYMENT_FAILED,

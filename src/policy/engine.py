@@ -37,7 +37,7 @@ class PolicyEngine:
             trace.append(PolicyCheck(
                 check = "agent_auth",
                 passed = False,
-                datail = f"Agent '{request.agent_id}' not found or invalid API key."
+                detail = f"Agent '{request.agent_id}' not found or invalid API key."
             ))
             return self._reject("UNAUTHORIZED", trace, warnings, db, request)
 
@@ -51,7 +51,7 @@ class PolicyEngine:
         recent_txn = db.query(AuditLogRecord).filter(
             AuditLogRecord.agent_id == request.agent_id,
             AuditLogRecord.product_id == request.product_id,
-            AuditLogRecord.event_type == AuditEventType.POLICY_APPROVED.value,
+            AuditLogRecord.event_type == AuditEventType.PAYMENT_INITIATED.value,
             AuditLogRecord.timestamp >= five_mins_ago
         ).first()
 
@@ -109,8 +109,31 @@ class PolicyEngine:
         trace.append(PolicyCheck(
             check = "category_allowed",
             passed = True,
-            detail = f"Category '{requested_category}' is permitted."
+            detail = f"Primary category '{requested_category}' is permitted."
         ))
+
+        # Check-3b : Addon Category Allowed (If addon is bundled)
+        if request.addon_product_id:
+            from src.catalog.service import get_product
+            addon = get_product(db, request.addon_product_id)
+            if addon:
+                addon_category = addon.category.lower()
+                if addon_category not in allowed:
+                    trace.append(PolicyCheck(
+                        check = "addon_category_allowed",
+                        passed = False,
+                        detail = (
+                            f"Addon category '{addon_category}' is not in this agent's"
+                            f"allowed categories: {mandate.allowed_categories}."
+                        )
+                    ))
+                    return self._reject("ADDON_CATEGORY_NOT_ALLOWED", trace, warnings, db, request)
+                trace.append(PolicyCheck(
+                    check = "addon_category_allowed",
+                    passed = True,
+                    detail = f"Addon category '{addon_category}' is permitted."
+                ))
+
 
         # Check-4 : Single Transaction Limit
         if request.total_amount_inr > mandate.max_single_txn_inr:

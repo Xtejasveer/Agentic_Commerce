@@ -25,6 +25,7 @@ class MandateCheckRequest(BaseModel):
     agent_id: str
     api_key: str
     product_id: str
+    addon_product_id: Optional[str] = None
     product_category: str
     quantity: int = Field(..., ge=1)
     total_amount_inr: float
