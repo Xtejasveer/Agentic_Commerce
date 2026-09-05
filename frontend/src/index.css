@@ -1,0 +1,86 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  /* Warm accent palette */
+  --color-warm-50:  #fdf8f0;
+  --color-warm-100: #faefd8;
+  --color-warm-200: #f5d9a8;
+  --color-warm-300: #edb96a;
+  --color-warm-400: #e59440;
+  --color-warm-500: #c4622d;
+  --color-warm-600: #a8521f;
+  --color-warm-700: #8a3f15;
+  --color-warm-800: #6e2f0e;
+  --color-warm-900: #4e1f08;
+
+  /* Light page surfaces */
+  --color-cream:      #faf8f5;
+  --color-cream-card: #ffffff;
+  --color-cream-alt:  #f5f0e8;
+  --color-cream-border: #e8ddd0;
+
+  /* Dark demo surfaces (warm) */
+  --color-dark-bg:     #1a120a;
+  --color-dark-card:   #251a10;
+  --color-dark-card2:  #2e2012;
+  --color-dark-border: #3e2d1a;
+  --color-dark-muted:  #5a4030;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: #faf8f5;
+  color: #1c1008;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar styling — warm */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f5f0e8; }
+::-webkit-scrollbar-thumb { background: #c4a882; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #a8866a; }
+
+/* Dark page scrollbars */
+.dark-scroll::-webkit-scrollbar-track { background: #251a10; }
+.dark-scroll::-webkit-scrollbar-thumb { background: #5a4030; border-radius: 3px; }
+
+/* SSE event cards animation */
+@keyframes slideInFromRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.event-card-enter { animation: slideInFromRight 0.3s ease-out; }
+
+/* Gradient text — warm amber to rose */
+.gradient-text {
+  background: linear-gradient(135deg, #c4622d, #e59440, #c4622d);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Live indicator */
+@keyframes livePulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+.live-dot { animation: livePulse 1.5s ease-in-out infinite; }
+
+/* Chat bubbles */
+.chat-bubble-user  { background: linear-gradient(135deg, #c4622d, #a8521f); }
+.chat-bubble-agent { background: #2e2012; border: 1px solid #3e2d1a; }
