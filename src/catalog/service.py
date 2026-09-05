@@ -40,6 +40,29 @@ def search_products(
     )
 
     if not chroma_results:
+        # Fallback: SQL keyword search if ChromaDB has no matches or cold-start
+        from sqlalchemy import or_
+        tokens = [t.lower() for t in query.split() if len(t) > 2 and t.lower() not in ["the", "for", "and", "under", "with", "buy", "get", "need"]]
+        if tokens:
+            conditions = []
+            for t in tokens:
+                conditions.append(ProductRecord.name.ilike(f"%{t}%"))
+                conditions.append(ProductRecord.description.ilike(f"%{t}%"))
+                conditions.append(ProductRecord.category.ilike(f"%{t}%"))
+            q_filter = db.query(ProductRecord).filter(or_(*conditions))
+            if category:
+                q_filter = q_filter.filter(ProductRecord.category == category.lower())
+            if max_price is not None:
+                q_filter = q_filter.filter(ProductRecord.price_inr <= max_price)
+            if min_price is not None:
+                q_filter = q_filter.filter(ProductRecord.price_inr >= min_price)
+            fallback_records = q_filter.limit(limit).all()
+            if fallback_records:
+                return SearchResult(
+                    products=[_record_to_product(r) for r in fallback_records],
+                    total_found=len(fallback_records),
+                    query=query
+                )
         return SearchResult(products=[], total_found=0, query=query)
 
     product_ids = [r["product_id"] for r in chroma_results]

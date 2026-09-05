@@ -44,8 +44,62 @@ try:
     with engine.connect() as conn:
         conn.execute(text("ALTER TABLE agent_mandates ADD COLUMN IF NOT EXISTS user_id VARCHAR;"))
         conn.commit()
+
+    # Auto-seed if database catalog is empty
+    from src.database.session import SessionLocal
+    from src.database.models import ProductRecord, AgentMandateRecord
+    from src.catalog.seed_data import PRODUCTS
+    from src.database.vector import vector_db
+
+    with SessionLocal() as db:
+        if db.query(ProductRecord).count() == 0:
+            logging.getLogger(__name__).info("Database catalog is empty. Auto-seeding 50 products...")
+            for p in PRODUCTS:
+                db.add(ProductRecord(
+                    product_id=p["product_id"],
+                    name=p["name"],
+                    description=p["description"],
+                    price_inr=p["price_inr"],
+                    stock_quantity=p["stock_quantity"],
+                    category=p["category"],
+                ))
+            db.commit()
+            logging.getLogger(__name__).info("50 products seeded into PostgreSQL.")
+
+        try:
+            if vector_db.collection.count() == 0:
+                logging.getLogger(__name__).info("ChromaDB vector collection is empty. Seeding embeddings...")
+                vector_db.add_products(PRODUCTS)
+                logging.getLogger(__name__).info("50 products seeded into ChromaDB.")
+        except Exception as ve:
+            logging.getLogger(__name__).warning(f"ChromaDB auto-seed notice: {ve}")
+
+        if db.query(AgentMandateRecord).count() == 0:
+            db.add(AgentMandateRecord(
+                agent_id="agent-buyer-01",
+                api_key="key-buyer-01-secret",
+                max_single_txn_inr=5000.0,
+                max_daily_spend_inr=15000.0,
+                allowed_categories=[
+                    "chargers", "cables", "power_banks", "earbuds", "headphones",
+                    "speakers", "smartwatches", "keyboards", "mice", "storage",
+                    "cases", "screen_protectors"
+                ],
+                requires_approval_above_inr=4000.0,
+                is_active=True,
+            ))
+            db.add(AgentMandateRecord(
+                agent_id="agent-buyer-02",
+                api_key="key-buyer-02-secret",
+                max_single_txn_inr=2000.0,
+                max_daily_spend_inr=5000.0,
+                allowed_categories=["chargers"],
+                requires_approval_above_inr=None,
+                is_active=True,
+            ))
+            db.commit()
 except Exception as e:
-    logging.getLogger(__name__).warning(f"Failed to auto-migrate database: {e}")
+    logging.getLogger(__name__).warning(f"Failed to auto-migrate/seed database: {e}")
 
 # Mount API router
 app.include_router(router, prefix="/api")

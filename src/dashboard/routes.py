@@ -763,3 +763,36 @@ def _format_mandate(r: AgentMandateRecord) -> dict:
         "is_active": r.is_active,
         "expires_at": r.expires_at.isoformat() if r.expires_at else None,
     }
+
+@router.post("/seed")
+@router.get("/seed")
+def seed_catalog_endpoint(db: Session = Depends(get_db)):
+    """Seed or re-seed the 50 products and vector embeddings."""
+    from src.catalog.seed_data import PRODUCTS
+    from src.database.vector import vector_db
+    try:
+        # Re-populate products if needed
+        existing = db.query(ProductRecord).count()
+        if existing == 0:
+            for p in PRODUCTS:
+                db.add(ProductRecord(
+                    product_id=p["product_id"],
+                    name=p["name"],
+                    description=p["description"],
+                    price_inr=p["price_inr"],
+                    stock_quantity=p["stock_quantity"],
+                    category=p["category"],
+                ))
+            db.commit()
+
+        # Seed vector DB
+        vector_db.delete_all()
+        vector_db.add_products(PRODUCTS)
+        return {
+            "status": "success",
+            "message": f"Successfully verified/seeded {len(PRODUCTS)} products in PostgreSQL & ChromaDB.",
+            "total_products": db.query(ProductRecord).count()
+        }
+    except Exception as e:
+        logger.exception(f"Manual seed failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
