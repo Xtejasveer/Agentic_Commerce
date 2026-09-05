@@ -35,93 +35,47 @@ As autonomous AI agents (personal assistants, enterprise procurement bots, OpenA
 
 ## 🏗️ Architecture
 
-```
-┌────────────────────────────────────────────────────────────────────────────┐
-│                              CLIENT LAYER                                  │
-│   React SPA (Dashboard & Demo)       │       Claude Desktop / External Bot │
-└───────────────────────┬──────────────────────────────────┬─────────────────┘
-                        │ HTTP / SSE                       │ stdio / MCP
-                        ▼                                  ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│                    AGENTIC COMMERCE CORE GATEWAY                           │
-│                                                                            │
-│  ┌─────────────────────────┐           ┌────────────────────────────────┐  │
-│  │   FastAPI Web Server    │           │    FastMCP Server              │  │
-│  │   - REST Endpoints      │           │    - search_products           │  │
-│  │   - Real-Time SSE Stream│           │    - validate_purchase_mandate │  │
-│  │   - Auth & Session Mgmt │           │    - suggest_addon             │  │
-│  │   - SPA Static Hosting  │           │    - execute_purchase          │  │
-│  └────────────┬────────────┘           └───────────────┬────────────────┘  │
-│               │                                        │                   │
-│               ▼                                        ▼                   │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │                 LangGraph Autonomous Buyer Agent                     │  │
-│  │  [search] ➔ [evaluate] ➔ [validate] ➔ [upsell] ➔ [purchase] ➔ [end]  │  │
-│  │                              ▲                                       │  │
-│  │                              └── [HITL Pause / Resume Hook]          │  │
-│  └──────────────────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────┬─────────────────────────────────────┘
-                                       │
-                        ┌──────────────┴──────────────┐
-                        ▼                             ▼
-┌─────────────────────────────────┐       ┌──────────────────────────────────┐
-│        DATA & STORAGE           │       │       PAYMENTS & SERVICES        │
-│  - PostgreSQL (Orders, Audits,  │       │  - Razorpay Headless API         │
-│    Mandates, Catalog, Users)    │       │  - OpenRouter (Gemini / Claude)  │
-│  - ChromaDB (Vector Embeddings) │       │  - Google OAuth 2.0              │
-└─────────────────────────────────┘       └──────────────────────────────────┘
-```
-
----
-
-## 🔄 End-to-End Purchase Flow
-
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor User as Human User
-    participant Agent as LangGraph Buyer Agent
-    participant MCP as FastMCP Merchant Server
-    participant Policy as Policy & Mandate Engine
-    participant Payment as Razorpay / PostgreSQL
-    
-    User->>Agent: "Buy a fast charger under ₹2,000"
-    
-    rect rgb(240, 248, 255)
-        Note over Agent, MCP: 1. Discovery & Selection
-        Agent->>MCP: search_products("fast charger")
-        MCP-->>Agent: Semantic search matches (ChromaDB)
-        Agent->>Agent: LLM evaluates specs, ratings, and price
+flowchart TD
+    subgraph Clients["Client Layer"]
+        UI["React SPA (Dashboard & Demo)"]
+        Claude["Claude Desktop / External AI Agents"]
     end
-    
-    rect rgb(255, 245, 238)
-        Note over Agent, Policy: 2. Primary Mandate Validation
-        Agent->>MCP: validate_purchase_mandate(prod_id, price)
-        MCP->>Policy: Verify budget & allowed categories
-        Policy-->>MCP: ✅ POLICY_APPROVED
-        MCP-->>Agent: Approved
+
+    subgraph Core["Agentic Commerce Core Gateway"]
+        API["FastAPI Web Server<br/>• REST APIs & Auth<br/>• Real-Time SSE Audit Stream<br/>• SPA Static Hosting"]
+        MCP["FastMCP Server<br/>• search_products<br/>• validate_purchase_mandate<br/>• suggest_addon<br/>• execute_purchase"]
+        
+        subgraph Agent["LangGraph Buyer Agent"]
+            Pipeline["Purchase StateGraph<br/>Search → Evaluate → Validate → Upsell → Purchase"]
+            HITL["Human-in-the-Loop Hook<br/>(Interactive Card Approval)"]
+            Pipeline <--> HITL
+        end
     end
-    
-    rect rgb(255, 250, 230)
-        Note over Agent, User: 3. Upsell Pitch & HITL Feedback
-        Agent->>MCP: suggest_addon(primary_product)
-        MCP-->>Agent: Proposes "Braided USB-C Cable (₹499)"
-        Agent->>Agent: Evaluates pitch and pauses workflow
-        Agent-->>User: Renders Interactive Upsell Approval Card
-        User->>Agent: Clicks "Accept" or "Decline"
+
+    subgraph Storage["Data & Storage"]
+        PG[("PostgreSQL Database<br/>• Orders & Transactions<br/>• Audit Logs<br/>• Mandates & Users")]
+        Chroma[("ChromaDB Vector Store<br/>• 50 Product Embeddings<br/>• Semantic Search")]
     end
-    
-    rect rgb(245, 255, 245)
-        Note over Agent, Payment: 4. Execution & Settlement
-        Agent->>MCP: execute_purchase(final_cart, human_feedback)
-        MCP->>Policy: Final strict policy & idempotency check
-        Policy-->>MCP: Passed
-        MCP->>Payment: Deduct stock & create Razorpay order
-        Payment-->>MCP: Razorpay payment link & order ID
-        MCP-->>Agent: PAYMENT_SUCCESS
+
+    subgraph External["External Services"]
+        Razorpay["Razorpay API<br/>(Headless Order & Link Gen)"]
+        OpenRouter["OpenRouter API<br/>(LLM Inference)"]
+        GoogleAuth["Google OAuth 2.0"]
     end
-    
-    Agent-->>User: "Order complete! Payment link: https://rzp.io/..."
+
+    UI -->|"HTTP / SSE"| API
+    Claude -->|"stdio / MCP"| MCP
+    API --> Agent
+    Agent --> MCP
+
+    Agent --> OpenRouter
+    API --> GoogleAuth
+    API --> PG
+
+    MCP --> Chroma
+    MCP --> PG
+    MCP --> Razorpay
 ```
 
 ---
