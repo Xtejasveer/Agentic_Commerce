@@ -4,6 +4,9 @@
 
 > **An autonomous Agent-to-Merchant transaction platform powered by the Model Context Protocol (MCP), LangGraph, FastAPI, PostgreSQL, and ChromaDB.**
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Railway-0B0D0E?style=for-the-badge&logo=railway&logoColor=white)](https://agenticcommerce-production-cce1.up.railway.app/landing)
+[![Launch Console](https://img.shields.io/badge/Launch_Console-Demo-c4622d?style=for-the-badge)](https://agenticcommerce-production-cce1.up.railway.app/demo)
+
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2.0-1C3C3C.svg?style=flat)](https://github.com/langchain-ai/langgraph)
 [![Model Context Protocol](https://img.shields.io/badge/MCP-Standard-purple.svg?style=flat)](https://modelcontextprotocol.io/)
@@ -13,25 +16,85 @@
 
 ---
 
-## 🌟 Executive Overview
+## 🌐 Live Deployment & Links
 
-As autonomous AI agents (personal assistants, enterprise procurement bots, OpenAI Operator, Claude Desktop) become the primary consumers on the internet, e-commerce infrastructure must transition from human-facing click funnels to **machine-readable, policy-governed endpoints**.
-
-**VendIQ** provides the complete reference architecture for an **AI-Native Merchant**. It enables autonomous buyer agents to discover products, negotiate dynamic bundles, validate organizational spending mandates, and execute transactions programmatically via the **Model Context Protocol (MCP)** — with built-in **Human-in-the-Loop (HITL)** governance and real-time observability.
+* 🔗 **Live Website & Overview**: **[https://agenticcommerce-production-cce1.up.railway.app/landing](https://agenticcommerce-production-cce1.up.railway.app/landing)**
+* 🎮 **Interactive Demo Console**: **[https://agenticcommerce-production-cce1.up.railway.app/demo](https://agenticcommerce-production-cce1.up.railway.app/demo)**
+* 📁 **GitHub Repository**: **[https://github.com/Xtejasveer/Agentic_Commerce](https://github.com/Xtejasveer/Agentic_Commerce)**
 
 ---
 
-## 🚀 Key Features
+## 🌟 Executive Overview
 
-- **🧠 Autonomous Buyer Agent (LangGraph)**: Multi-step reasoning pipeline (`Search` → `Evaluate` → `Validate` → `Upsell Evaluation` → `Purchase Execution` → `Respond`).
-- **🔌 Model Context Protocol (MCP) Server**: Full `FastMCP` implementation exposing product catalog search, mandate checks, add-on pitches, and purchase execution. Compatible out of the box with **Claude Desktop**.
-- **🛡️ Deterministic Policy Engine**: Defense-in-depth safety checks ensuring agents cannot exceed daily budgets, buy disallowed categories, or double-charge orders (idempotency guarantees).
-- **👤 Human-in-the-Loop (HITL) Upsell Approvals**: When a merchant offers a complementary upsell, the agent evaluates the pitch, pauses execution, and requests human confirmation via an interactive card before committing payment.
-- **🧶 Visual Thought-Process Rope**: Collapsible interactive stepper visualizing each internal cognitive step (search queries, LLM scoring, policy verification traces, and decision rationale).
-- **📊 Real-Time Merchant Dashboard & Audit Trail**: Live Server-Sent Events (SSE) stream capturing every agent action, tool invocation, mandate verification, and transaction status in real time.
-- **📦 50-Product Consumer Electronics Catalog**: 50 realistic products indexed across 12 categories in PostgreSQL with dense semantic embeddings stored in ChromaDB.
-- **💳 Headless Razorpay Checkout**: Server-to-server payment order generation with automated webhook signature verification.
-- **🔐 Multi-User Authentication & Mandate Scoping**: Google OAuth 2.0 and session-based authentication allowing individual users to define and customize their buyer agents' budget limits and approved categories.
+Today's e-commerce is built for human eyeballs: visual storefronts, marketing banners, and multi-click checkout funnels. As autonomous AI agents (Claude Desktop, personal procurement bots, OpenAI Operator) become the primary consumers on the internet, commerce infrastructure must transition from human-facing click funnels to **machine-readable, policy-governed endpoints**.
+
+When AI agents buy on behalf of individuals or businesses, two fundamental challenges emerge:
+1. **The Discovery & Negotiation Void**: Merchants have no standardized protocol to expose inventory, price dynamics, and upsell pitches directly to autonomous agents.
+2. **The Runaway Agent Risk**: Users cannot safely hand credit cards to autonomous bots without risking hallucinated purchases, broken spending budgets, or unauthorized category buying.
+
+**VendIQ** provides the complete reference architecture for an **AI-Native Merchant**. It standardizes machine-to-machine commerce using Anthropic's **Model Context Protocol (MCP)**, coordinates complex procurement flows using **LangGraph**, enforces deterministic spending mandates in **PostgreSQL**, and provides **Human-in-the-Loop (HITL)** governance with live real-time observability.
+
+---
+
+## 🚀 Deep Dive: Core Features
+
+### 1. 🧠 Multi-Step LangGraph Buyer Pipeline
+The buyer agent is built on a stateful **LangGraph StateGraph** that models the full cognitive lifecycle of an enterprise procurement manager:
+* **`Search Node`**: Translates natural language requests into structured queries with price bounds and semantic filters.
+* **`Evaluate Node`**: Evaluates returned candidates against user constraints, customer ratings, and specs to select the best match.
+* **`Validate Node`**: Checks organizational mandate policies before committing to any product.
+* **`Evaluate Upsell Node`**: Analyzes merchant-pitched add-ons, evaluates bundle value, and triggers human approval gates.
+* **`Purchase Node`**: Atomically executes stock deduction, final policy validation, and headless payment generation.
+* **`Respond Node`**: Synthesizes a conversational response with order confirmation and payment links.
+
+### 2. 🔌 Standard Model Context Protocol (MCP) Gateway
+VendIQ implements a full **FastMCP** server exposing structured merchant tools to external agents over standard `stdio` or HTTP:
+* **`search_products`**: Semantic vector search over the product catalog with category and price filtering.
+* **`validate_purchase_mandate`**: Verification of spending authority against database policy records.
+* **`suggest_addon`**: Algorithmic merchant engine proposing complementary accessories, bundled discounts, and protection plans.
+* **`execute_purchase`**: Idempotent order placement, live stock reservation, and headless payment creation.
+> *Compatible out of the box with **Claude Desktop**, OpenAI tool calling, and any MCP-compliant client.*
+
+### 3. 🛡️ Deterministic Defense-in-Depth Policy Engine
+To guarantee enterprise safety, VendIQ eliminates "hallucinated purchases" through dual-layer deterministic enforcement:
+* **Agent-Level Policy Checks**: The buyer agent consults the policy engine during reasoning to disqualify non-compliant items early.
+* **Transactional Database Guard**: The final purchase execution strictly enforces policy validation at the PostgreSQL database level. Even if an LLM hallucinates an approval, the transaction will fail.
+* **Enforced Parameters**: Single-transaction limits (₹), daily spending ceilings (₹), allowed category whitelists, and active mandate status.
+* **Idempotency Protection**: Prevents duplicate charges by hashing cart contents and enforcing order cooldown windows.
+
+### 4. 👤 Human-in-the-Loop (HITL) Upsell Approvals
+Commercial negotiations often introduce new variables—such as merchant upsell pitches. VendIQ balances agent autonomy with human agency:
+* When the merchant suggests a complementary add-on (e.g., offering a braided 100W cable with a charger or a memory foam wrist rest with a mouse), the agent **pauses its workflow**.
+* An **Interactive Human Feedback Card** renders in real time with the merchant's pitch and action buttons: **Accept Offer** and **Decline Offer**.
+* If the user accepts, the agent seamlessly updates the cart to both items.
+* If the user declines, the agent drops the add-on and **still safely completes the purchase of the primary product**.
+
+### 5. 🧶 Visual Thought-Process Rope (Cognitive Transparency)
+Instead of a black-box answer, VendIQ features a clean, collapsible vertical "rope" stepper showing every cognitive step the agent executed:
+* Visualizes circular event nodes connected by an active line: `Search` ➔ `Evaluate` ➔ `Validate` ➔ `Upsell` ➔ `Purchase`.
+* Expands on demand to reveal the agent's internal reasoning, candidate product scoring, and policy verification traces.
+
+### 6. 📊 Real-Time Observability & Live SSE Audit Feed
+Every agent action is treated as an immutable audit event streamed over **Server-Sent Events (SSE)**:
+* Tracks tool invocations, candidate evaluation traces, mandate approvals, rejections, and payment settlements.
+* Surfaces real-time merchant KPI metrics:
+  * **Unmet Demand Signals**: Automatically logs when an agent searches for out-of-stock items or uncataloged goods to inform merchant restocking.
+  * **Sales Recovered**: Tracks conversions facilitated through dynamic alternatives.
+  * **Upsell Acceptance Rate**: Live telemetry on merchant bundle conversion.
+
+### 7. 📦 50-Product Catalog with Hybrid Vector + Keyword Search
+* 50 realistic consumer electronics products across **12 tech categories**: chargers, cables, power banks, earbuds, headphones, speakers, smartwatches, keyboards, mice, storage, cases, and screen protectors.
+* **Dense Semantic Search**: Indexed in **ChromaDB** with cosine similarity embeddings to understand vague intent (e.g., *"comfortable mouse for wrist pain"* maps to the *Logitech MX Master 3S*).
+* **SQL Keyword Fallback**: Automatic PostgreSQL `ILIKE` fallback ensures search resilience even during cold-starts.
+
+### 8. 💳 Headless Razorpay Integration
+* Direct server-to-server integration with Razorpay's order and payment link API.
+* Generates live, payable checkout links (`https://rzp.io/...`) delivered directly in the agent's final response.
+* Automated webhook endpoint with cryptographic signature verification for transaction lifecycle synchronization.
+
+### 9. 🔐 Multi-User Authentication & Dynamic Agent Mandates
+* Supports **Google OAuth 2.0** and session-based email/password authentication.
+* **Live Agent Creator**: Users can register new buyer agents on the fly in the UI, assigning custom budgets and whitelisting specific categories to test real-time policy adherence.
 
 ---
 
@@ -85,7 +148,7 @@ flowchart TD
 ## 🗂️ Repository Structure
 
 ```
-Agentic Commerce/
+VendIQ/
 ├── main.py                     # Unified CLI entrypoint (dashboard, mcp, seed)
 ├── requirements.txt            # Python production dependencies
 ├── pyproject.toml              # Project metadata and package specs
@@ -105,15 +168,17 @@ Agentic Commerce/
 │   │
 │   ├── catalog/                # Product catalog & vector storage
 │   │   ├── seed_data.py        # 50 electronics products across 12 categories
+│   │   ├── service.py          # Search service with ChromaDB + SQL fallback
 │   │   └── vector_store.py     # ChromaDB collection initialization & search
 │   │
 │   ├── dashboard/              # FastAPI Merchant Backend
-│   │   ├── app.py              # FastAPI app setup, CORS, static SPA mounting
+│   │   ├── app.py              # FastAPI app, static SPA mounting & background auto-seed
 │   │   └── routes.py           # REST APIs, SSE audit stream, HITL resolution
 │   │
 │   ├── database/               # Relational persistence
 │   │   ├── models.py           # SQLAlchemy models (Order, Audit, Mandate, Product)
-│   │   └── session.py          # PostgreSQL engine and session factory
+│   │   ├── session.py          # PostgreSQL engine and session factory
+│   │   └── vector.py           # ChromaDB client wrapper
 │   │
 │   └── payments/               # Payment gateways
 │       └── razorpay_client.py  # Razorpay client & webhook signature verification
@@ -156,7 +221,7 @@ The application relies on the following environment variables:
 
 ## 🤖 Connecting to Claude Desktop (MCP)
 
-This project functions as a standard MCP server that any MCP-compliant client (like Claude Desktop) can connect to.
+VendIQ functions as a standard MCP server that any MCP-compliant client (like Claude Desktop) can connect to.
 
 ### 1. Configure Claude Desktop
 Add this server to your Claude Desktop configuration file:
@@ -197,8 +262,8 @@ When Claude Desktop connects, it automatically gains access to:
 
 ## 🔒 Security & Policy Governance
 
-- **Deterministic Defense-in-Depth**: Policy checks are executed both at the agent reasoning level and enforced independently inside the transactional database layer before payment link generation.
-- **Idempotency Guard**: Prevents accidental duplicate purchases of identical items within configurable time windows.
+- **Deterministic Defense-in-Depth**: Policy checks are evaluated both during agent reasoning and strictly verified inside the database layer before any payment link can be generated.
+- **Idempotency Guard**: Prevents duplicate charges by hashing cart contents and enforcing order cooldown windows.
 - **Audit Immutability**: Every policy decision (`POLICY_APPROVED`, `POLICY_REJECTED`, `UPSELL_PROPOSED`, `PAYMENT_SUCCESS`) is logged with timestamps, agent IDs, and full rationale traces.
 
 ---
