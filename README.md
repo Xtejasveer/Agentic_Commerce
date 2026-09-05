@@ -263,8 +263,3 @@ When Claude Desktop connects, it automatically gains access to:
 - **Deterministic Defense-in-Depth**: Policy checks are evaluated both during agent reasoning and strictly verified inside the database layer before any payment link can be generated.
 - **Idempotency Guard**: Prevents duplicate charges by hashing cart contents and enforcing order cooldown windows.
 - **Audit Immutability**: Every policy decision (`POLICY_APPROVED`, `POLICY_REJECTED`, `UPSELL_PROPOSED`, `PAYMENT_SUCCESS`) is logged with timestamps, agent IDs, and full rationale traces.
-
----
-
-## 📄 License
-This project is open source and available under the [MIT License](LICENSE).
