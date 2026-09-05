@@ -164,9 +164,10 @@ def suggest_addon(
     db = SessionLocal()
     try:
         from src.catalog.service import get_product, log_audit_event
-        # Simple hardcoded upsell logic: If buyin"g a charger, pitch a cable.
-        if product_id in ["prod-001", "prod-002","prod-003","prod-004", "prod-005"]: 
-            addon = get_product(db, "prod-006") # The cable
+        # Multi-category upsell logic:
+        # 1. Chargers & Power Banks -> Offer Anker 240W braided cable (prod-006)
+        if product_id in ["prod-001", "prod-002", "prod-003", "prod-004", "prod-005", "prod-018", "prod-019", "prod-020", "prod-008", "prod-009", "prod-010", "prod-024"]: 
+            addon = get_product(db, "prod-006")
             if addon:
                 return {
                     "has_addon": True,
@@ -175,6 +176,40 @@ def suggest_addon(
                     "price_inr": addon.price_inr,
                     "merchant_pitch": "10% discount on this premium braided cable when bundled with a charger today! Highly recommended to maximize charging speed."
                 }
+        # 2. Mice -> Offer ergonomic memory foam mouse pad with wrist rest (prod-047)
+        elif product_id in ["prod-044", "prod-045", "prod-046"]:
+            addon = get_product(db, "prod-047")
+            if addon:
+                return {
+                    "has_addon": True,
+                    "addon_product_id": addon.product_id,
+                    "name": addon.name,
+                    "price_inr": addon.price_inr,
+                    "merchant_pitch": "Bundle an ergonomic memory foam mouse pad with wrist rest to maximize precision and eliminate wrist fatigue."
+                }
+        # 3. Phone Cases -> Offer tempered glass screen protector (prod-016)
+        elif product_id in ["prod-014", "prod-015"]:
+            addon = get_product(db, "prod-016")
+            if addon:
+                return {
+                    "has_addon": True,
+                    "addon_product_id": addon.product_id,
+                    "name": addon.name,
+                    "price_inr": addon.price_inr,
+                    "merchant_pitch": "Complete 360-degree protection: Add a 9H tempered glass screen protector to your order for just ₹499."
+                }
+        # 4. Keyboards -> Offer heavy-duty braided cable (prod-006)
+        elif product_id in ["prod-041", "prod-042", "prod-043"]:
+            addon = get_product(db, "prod-006")
+            if addon:
+                return {
+                    "has_addon": True,
+                    "addon_product_id": addon.product_id,
+                    "name": addon.name,
+                    "price_inr": addon.price_inr,
+                    "merchant_pitch": "Upgrade your desk setup with a high-durability braided cable to power your mechanical keyboard."
+                }
+
         return {"has_addon": False}
     finally:
         db.close()

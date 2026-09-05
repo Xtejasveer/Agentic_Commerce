@@ -251,7 +251,7 @@ def make_evaluate_upsell_node(tools: list, llm):
     async def evaluate_upsell_node(state: AgentState) -> dict:
         product = state.get("selected_product", {})
         if not product:
-            return {}
+            return {"suggested_addon": None, "addon_product": None, "addon_decision": None}
 
         logger.info(f"[evaluate_upsell_node] Checking for addons for {product.get('product_id')}")
 
@@ -272,7 +272,7 @@ def make_evaluate_upsell_node(tools: list, llm):
             addon_data = _parse_mcp_response(raw_addon)
         
         if not isinstance(addon_data, dict) or not addon_data.get("has_addon"):
-            return {}
+            return {"suggested_addon": None, "addon_product": None, "addon_decision": None}
 
         logger.info(f"[evaluate_upsell_node] Merchant suggested addon: {addon_data.get('addon_product_id')}")
 
@@ -358,7 +358,10 @@ Output JSON:
 
         return {
             "suggested_addon": addon_data if decision == "accept" else None,
+            "addon_product": addon_data,
             "addon_decision": decision,
+            "addon_narration": narration,
+            "current_step": "awaiting_upsell_approval" if decision == "accept" else "purchase",
             "messages": [AIMessage(content=f"🛍️ Upsell Evaluation: {narration}")]
         }
     return evaluate_upsell_node
@@ -548,41 +551,157 @@ def make_purchase_node(tools: list):
 
 def make_respond_node():
     """
-    Node-5 (terminal): Generate the final human-readable response.
+    Node-5 (terminal): Generate the final human-readable response with a detailed
+    decision rationale breakdown explaining each step and choice made by the agent.
     """
 
     async def respond_node(state: AgentState) -> dict:
         step = state.get("current_step")
+
         if step == "inform":
-            # The agent is just answering a question, return the final response
-            return {"final_response": state.get("final_response", "I can help you find products.")}
+            reason = state.get("final_response") or "I can help you browse and purchase products."
+            response = (
+                f"{reason}\n\n"
+                f"---\n\n"
+                f"### 🧠 Decision Rationale:\n"
+                f"• **Intent Detection:** Identified your prompt as an informational inquiry rather than an explicit order.\n"
+                f"• **Catalog Search:** Scanned inventory across authorized categories to summarize available products without initiating unauthorized charges."
+            )
+            return {"final_response": response, "messages": [AIMessage(content=response)]}
+
         elif step == "done":
             result = state.get("purchase_result", {})
             recovery_prefix = ""
             if state.get("recovered_from_rejection"):
                 recovery_prefix = f"🔄 **Sale Recovered!** {state.get('recovery_narrative', '')}\n\n"
 
+            # Build decision rationale breakdown
+            rationale_lines = []
+
+            # 1. Product Selection
+            selected = state.get("selected_product") or {}
+            sel_name = selected.get("name") or result.get("product_name", "Product")
+            sel_price = selected.get("price_inr") or result.get("total_amount_inr", 0)
+            sel_reason = selected.get("reason", "Best match for your requirements.")
+
+            if state.get("recovered_from_rejection"):
+                rationale_lines.append(
+                    f"• **Product Selection & Recovery:** The originally requested product was rejected by the policy engine. "
+                    f"I autonomously searched for compliant in-stock alternatives and selected **{sel_name}** (₹{sel_price:,.0f}) to successfully fulfill your purchase within budget."
+                )
+            else:
+                rationale_lines.append(
+                    f"• **Product Selection:** Evaluated catalog options and selected **{sel_name}** (₹{sel_price:,.0f}). Reason: {sel_reason}"
+                )
+
+            # 2. Policy Engine Verification
+            mandate_res = state.get("mandate_result") or {}
+            if mandate_res.get("approved"):
+                trace = mandate_res.get("decision_trace", [])
+                trace_checks = [c.get("check") for c in trace if c.get("passed")]
+                checks_summary = []
+                if "single_txn_limit" in trace_checks:
+                    checks_summary.append("within single transaction limit")
+                if "daily_spend_limit" in trace_checks:
+                    checks_summary.append("within daily budget")
+                if "category_allowed" in trace_checks:
+                    checks_summary.append("category authorized under mandate")
+                checks_str = ", ".join(checks_summary) if checks_summary else "all mandate policy constraints satisfied"
+                rationale_lines.append(
+                    f"• **Policy Engine Check:** Approved — Verified {checks_str} before committing funds."
+                )
+
+            # 3. Upsell Offer Evaluation (if applicable)
+            addon_product = state.get("addon_product")
+            addon_decision = state.get("addon_decision")
+            addon_narration = state.get("addon_narration")
+            human_fb = state.get("human_feedback")
+
+            if addon_product:
+                addon_name = addon_product.get("name", "Bundle addon")
+                addon_price = addon_product.get("price_inr", 0)
+                if addon_decision == "accept" or human_fb == "approved":
+                    reason_str = addon_narration or "It complements your purchase and the combined bundle total stays within your spending limits."
+                    fb_str = " (Confirmed by your approval)" if human_fb == "approved" else ""
+                    rationale_lines.append(
+                        f"• **Upsell Evaluation & Human Feedback (Accepted):** Added **{addon_name}** bundle at ₹{addon_price:,.0f}. Reason: {reason_str}{fb_str}"
+                    )
+                elif human_fb == "declined":
+                    rationale_lines.append(
+                        f"• **Upsell Evaluation & Human Feedback (Declined by User):** Agent recommended **{addon_name}** (₹{addon_price:,.0f}), but you opted to decline the add-on. Proceeded with primary purchase only."
+                    )
+                else:
+                    reason_str = addon_narration or "Declined optional addon to avoid unnecessary spend and preserve budget."
+                    rationale_lines.append(
+                        f"• **Upsell Evaluation (Declined):** Declined **{addon_name}** (₹{addon_price:,.0f}). Reason: {reason_str}"
+                    )
+
+            # 4. Payment Execution
+            if result.get("success"):
+                order_ref = result.get("razorpay_order_id") or result.get("order_id", "created")
+                rationale_lines.append(
+                    f"• **Payment Execution:** Created Razorpay order `{order_ref}` with instant payment link via secure headless checkout."
+                )
+
+            rationale_block = "\n".join(rationale_lines)
+
+            addon_line = ""
+            if state.get("suggested_addon"):
+                addon = state.get("suggested_addon")
+                addon_line = f"🎁 **Bundle Addon:** {addon.get('name')} (+₹{addon.get('price_inr', 0):,.2f})\n"
+
             response = (
-                f"{recovery_prefix}✅ Order placed successfully!\n\n"
-                f"📦 Product:       {result.get('product_name')}\n"
-                f"🔢 Quantity:      {result.get('quantity')}\n"
-                f"💰 Total:         ₹{result.get('total_amount_inr', 0):,.2f}\n"
-                f"🆔 Order ID:      {result.get('order_id', 'N/A')}\n"
-                f"📋 Razorpay ID:   {result.get('razorpay_order_id', 'N/A')}\n"
-                f"🔗 Payment Link:  {result.get('payment_link_url', 'N/A')}\n\n"
-                f"Open the payment link to complete checkout."
+                f"{recovery_prefix}✅ **Order Placed Successfully!**\n\n"
+                f"📦 **Product:**       {result.get('product_name')}\n"
+                f"{addon_line}"
+                f"🔢 **Quantity:**      {result.get('quantity', 1)}\n"
+                f"💰 **Total:**         ₹{result.get('total_amount_inr', 0):,.2f}\n"
+                f"🆔 **Order ID:**      `{result.get('order_id', 'N/A')}`\n"
+                f"📋 **Razorpay ID:**   `{result.get('razorpay_order_id', 'N/A')}`\n"
+                f"🔗 **Payment Link:**  {result.get('payment_link_url', 'N/A')}\n\n"
+                f"Open the payment link to complete checkout.\n\n"
+                f"---\n\n"
+                f"### 🧠 Decision Rationale & Steps:\n"
+                f"{rationale_block}"
             )
+
         else:
             error = state.get("error", "Unknown error")
             mandate = state.get("mandate_result") or {}
             trace = mandate.get("decision_trace", [])
             failed_check = next((c for c in reversed(trace) if not c.get("passed")), None)
-            response = f"❌ Purchase could not be completed.\n\nReason: {error}"
-            if failed_check:
-                response += (
-                    f"\n\nFailed check: [{failed_check.get('check')}]\n"
-                    f"{failed_check.get('detail', '')}"
+
+            rationale_lines = []
+            selected = state.get("selected_product") or {}
+            if selected and selected.get("name"):
+                rationale_lines.append(
+                    f"• **Product Evaluation:** Identified **{selected.get('name')}** (₹{selected.get('price_inr', 0):,.0f}) as the closest candidate from catalog search."
                 )
+
+            if failed_check:
+                rationale_lines.append(
+                    f"• **Policy Check Blocked ({failed_check.get('check')}):** {failed_check.get('detail', error)}"
+                )
+            else:
+                rationale_lines.append(
+                    f"• **Policy Check Blocked:** {error}"
+                )
+
+            if not mandate.get("recommended_alternative"):
+                rationale_lines.append(
+                    "• **Recovery Attempt:** No compliant in-stock alternative in an authorized category was found."
+                )
+
+            rationale_block = "\n".join(rationale_lines)
+
+            response = (
+                f"❌ **Purchase Could Not Be Completed**\n\n"
+                f"**Reason:** {error}\n\n"
+                f"---\n\n"
+                f"### 🧠 Decision Rationale & Steps:\n"
+                f"{rationale_block}"
+            )
+
         return {
             "final_response": response,
             "messages": [AIMessage(content=response)],

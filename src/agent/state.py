@@ -15,7 +15,9 @@ class AgentState(TypedDict):
     search_results:list
     selected_product: Optional[dict]
     suggested_addon: Optional[dict]
+    addon_product: Optional[dict]
     addon_decision: Optional[str]
+    addon_narration: Optional[str]
     mandate_result: Optional[dict]
     purchase_result: Optional[dict]
 
@@ -26,4 +28,6 @@ class AgentState(TypedDict):
     recovery_attempted: bool
     recovered_from_rejection: bool
     recovery_narrative: Optional[str]
+    human_feedback: Optional[str]
+    action_id: Optional[str]
 

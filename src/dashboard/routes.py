@@ -21,7 +21,7 @@ from src.database.models import AuditLogRecord, OrderRecord, AgentMandateRecord,
 from src.payments.razorpay_client import verify_webhook_signature
 from src.config import settings
 from pydantic import BaseModel, EmailStr
-from src.agent.buyer import run_buyer_agent
+from src.agent.buyer import run_buyer_agent, stream_buyer_agent, stream_buyer_agent_resume
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -168,8 +168,8 @@ def google_oauth_callback(code: Optional[str] = None, error: Optional[str] = Non
                 user.avatar_url = avatar_url
                 db.commit()
 
-        # 4. Set session cookie and redirect to dashboard
-        response = RedirectResponse(url="/", status_code=302)
+        # 4. Set session cookie and redirect to landing page
+        response = RedirectResponse(url="/landing", status_code=302)
         response.set_cookie(key="agentic_session", value=user.id, httponly=True, samesite="lax", max_age=86400*7)
         return response
 
@@ -228,6 +228,7 @@ _sse_queue: asyncio.Queue = asyncio.Queue()
 class ChatRequest(BaseModel):
     agent_id: str
     message: str
+    stream: Optional[bool] = True
 
 class CreateMandateRequest(BaseModel):
     agent_id: str
@@ -297,8 +298,8 @@ def create_agent_mandate(req: CreateMandateRequest, request: Request, db: Sessio
 @router.post("/chat")
 async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
     """
-    Runs the LangGraph buyer agent in the background and returns its response.
-    Dynamically looks up the agent's real credentials from PostgreSQL.
+    Runs the LangGraph buyer agent and streams each execution step as NDJSON events,
+    finishing with the final response.
     """
     try:
         # Dynamically look up the agent's real API key from PostgreSQL
@@ -307,29 +308,84 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
         ).first()
         api_key = mandate.api_key if mandate else f"key-{request.agent_id}-secret"
         
-        # Run agent
-        state = await run_buyer_agent(
-            user_request=request.message,
-            agent_id=request.agent_id,
-            api_key=api_key
+        # If client explicitly requests non-streaming
+        if request.stream is False:
+            state = await run_buyer_agent(
+                user_request=request.message,
+                agent_id=request.agent_id,
+                api_key=api_key
+            )
+            if state.get("error"):
+                return {"response": f"❌ Purchase could not be completed.\n\nReason: {state['error']}"}
+            final_msg = state.get("final_response") or "Task completed."
+            return {"response": final_msg}
+
+        # Stream intermediate thought steps and final response
+        async def stream_generator():
+            try:
+                async for event in stream_buyer_agent(
+                    user_request=request.message,
+                    agent_id=request.agent_id,
+                    api_key=api_key
+                ):
+                    yield json.dumps(event) + "\n"
+            except Exception as e:
+                logger.error(f"Chat stream error: {e}")
+                err_event = {
+                    "type": "done",
+                    "response": f"❌ Error running agent: {str(e)}"
+                }
+                yield json.dumps(err_event) + "\n"
+
+        return StreamingResponse(
+            stream_generator(),
+            media_type="application/x-ndjson",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            }
         )
-        
-        # Check for error or final response
-        if state.get("error"):
-            return {"response": f"❌ Purchase could not be completed.\n\nReason: {state['error']}"}
-        
-        final_msg = state.get("final_response")
-        if not final_msg:
-            # Fallback to last message
-            if state.get("messages"):
-                final_msg = state["messages"][-1].content
-            else:
-                final_msg = "Task completed."
-                
-        return {"response": final_msg}
+
     except Exception as e:
         logger.error(f"Chat error: {e}")
         return {"response": f"❌ Error running agent: {str(e)}"}
+
+
+class ResolveUpsellRequest(BaseModel):
+    action_id: str
+    approved: bool
+
+
+@router.post("/chat/resolve-upsell")
+async def resolve_upsell_endpoint(request: ResolveUpsellRequest):
+    """
+    Resumes an agent purchase workflow after the human user decides whether to
+    accept or decline an upsell bundle offer. Streams execution steps and final order.
+    """
+    async def stream_generator():
+        try:
+            async for event in stream_buyer_agent_resume(
+                action_id=request.action_id,
+                approved=request.approved
+            ):
+                yield json.dumps(event) + "\n"
+        except Exception as e:
+            logger.error(f"Resolve upsell stream error: {e}")
+            err_event = {
+                "type": "done",
+                "response": f"❌ Error completing purchase: {str(e)}"
+            }
+            yield json.dumps(err_event) + "\n"
+
+    return StreamingResponse(
+        stream_generator(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
 
 ## Health 
 @router.get("/health")

@@ -73,7 +73,11 @@ def seed_mandates(db):
             api_key = "key-buyer-01-secret",
             max_single_txn_inr = 5000.0,
             max_daily_spend_inr = 15000.0,
-            allowed_categories=["chargers", "cables", "power_banks", "earbuds", "cases", "screen_protectors"],
+            allowed_categories=[
+                "chargers", "cables", "power_banks", "earbuds", "headphones",
+                "speakers", "smartwatches", "keyboards", "mice", "storage",
+                "cases", "screen_protectors"
+            ],
             requires_approval_above_inr = 4000.0,
             is_active = True,
         ),

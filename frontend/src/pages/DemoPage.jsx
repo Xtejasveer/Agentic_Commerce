@@ -132,7 +132,11 @@ function NewAgentModal({ onClose, onCreated }) {
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const categories = ['electronics', 'accessories', 'clothing', 'books', 'food', 'sports', 'home', 'beauty']
+  const categories = [
+    'chargers', 'cables', 'power_banks', 'earbuds', 'headphones',
+    'speakers', 'smartwatches', 'keyboards', 'mice', 'storage',
+    'cases', 'screen_protectors'
+  ]
 
   const toggleCategory = (cat) => {
     setForm(f => ({
