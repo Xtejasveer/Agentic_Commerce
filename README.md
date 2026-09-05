@@ -258,8 +258,47 @@ When Claude Desktop connects, it automatically gains access to:
 
 ---
 
-## 🔒 Security & Policy Governance
+## 🔒 Security & Policy Governance: Zero-Trust for AI Agents
 
-- **Deterministic Defense-in-Depth**: Policy checks are evaluated both during agent reasoning and strictly verified inside the database layer before any payment link can be generated.
-- **Idempotency Guard**: Prevents duplicate charges by hashing cart contents and enforcing order cooldown windows.
-- **Audit Immutability**: Every policy decision (`POLICY_APPROVED`, `POLICY_REJECTED`, `UPSELL_PROPOSED`, `PAYMENT_SUCCESS`) is logged with timestamps, agent IDs, and full rationale traces.
+In autonomous agentic commerce, **LLMs cannot be trusted with unchecked financial execution**. Hallucinations, prompt injections, or unexpected reasoning loops could lead to catastrophic budget depletion. 
+
+VendIQ implements a **Zero-Trust Defense-in-Depth Architecture**, ensuring that all agent actions are bounded by deterministic, mathematically verifiable rules enforced at the database level.
+
+### 🛡️ The 8-Step Deterministic Policy Pipeline
+
+Every purchase mandate check undergoes an ordered, multi-stage evaluation pipeline in `src/policy/engine.py`. The engine uses **short-circuit evaluation**, halting at the first violation to return actionable, human-readable rejection rationale:
+
+| # | Policy Check | Scope | Description | Enforcement Action |
+| :---: | :--- | :--- | :--- | :--- |
+| **1** | **Agent Authentication** | Identity | Cryptographically verifies the agent's `api_key` against PostgreSQL records. | Rejects with `UNAUTHORIZED` |
+| **2** | **Idempotency Guard** | Concurrency | Checks the immutable audit trail for identical purchases within a **5-minute cooldown window**. | Rejects with `IDEMPOTENCY_BLOCK` |
+| **3** | **Mandate Liveness** | Temporal | Verifies `is_active == True` and confirms UTC expiration timestamps (`expires_at`). | Rejects with `MANDATE_INACTIVE` or `EXPIRED` |
+| **4** | **Category Whitelisting** | Governance | Validates that both the primary item and any merchant add-on belong to the agent's pre-approved category list. | Rejects with `CATEGORY_NOT_ALLOWED` |
+| **5** | **Single-Transaction Cap** | Budget | Enforces maximum allowable price per single transaction (`max_single_txn_inr`). | Rejects with `SINGLE_TXN_LIMIT_EXCEEDED` |
+| **6** | **Daily Spending Velocity** | Budget | Aggregates today's cumulative spend (`SUM(amount_inr)`) to guarantee the projected total never breaches `max_daily_spend_inr`. | Rejects with `DAILY_SPEND_LIMIT_EXCEEDED` |
+| **7** | **Authoritative Stock** | Inventory | Queries PostgreSQL real-time inventory counts to prevent ordering exhausted SKUs. | Rejects with `STOCK_EXHAUSTED` |
+| **8** | **Human Approval Gate** | Governance | Evaluates whether order exceeds the human review threshold (`requires_approval_above_inr`), triggering HITL escalation. | Enforces Human Sign-off |
+
+---
+
+### 🧱 Defense-in-Depth: Dual-Layer Enforcement
+
+VendIQ separates agent reasoning from financial settlement into two independent architectural barriers:
+
+1. **Advisory Layer (Agent Reasoning)**:  
+   During candidate evaluation, the LangGraph agent calls `validate_purchase_mandate` to filter out disallowed categories and budget-busting options early in its decision loop.
+2. **Authoritative Gate (Database Settlement)**:  
+   When `execute_purchase` is invoked, the backend re-executes the **entire 8-step policy pipeline inside an atomic database transaction**. Even if an adversarial prompt causes an LLM to hallucinate that an item is approved, the underlying database will reject the transaction before any Razorpay order or payment link can be generated.
+
+---
+
+### ⚡ Complete Explainability & Audit Immutability
+
+* **Granular Policy Traces**: Every validation result returns a structured `trace` array logging each individual check, its boolean status, and an explanatory message.
+* **Immutable Audit Trail**: Every event—including `POLICY_APPROVED`, `POLICY_REJECTED`, `UPSELL_SUGGESTED`, and `PAYMENT_INITIATED`—is recorded in PostgreSQL with microsecond timestamps, agent IDs, and full JSON payload traces, streamed in real time via Server-Sent Events (SSE).
+* **Cryptographic Webhook Security**: Incoming Razorpay payment notifications are validated via HMAC-SHA256 signature verification using `RAZORPAY_WEBHOOK_SECRET` before marking orders as paid.
+
+---
+
+## 📄 License
+This project is open source and available under the [MIT License](LICENSE).
