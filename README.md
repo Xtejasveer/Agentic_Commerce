@@ -298,7 +298,3 @@ VendIQ separates agent reasoning from financial settlement into two independent 
 * **Immutable Audit Trail**: Every event—including `POLICY_APPROVED`, `POLICY_REJECTED`, `UPSELL_SUGGESTED`, and `PAYMENT_INITIATED`—is recorded in PostgreSQL with microsecond timestamps, agent IDs, and full JSON payload traces, streamed in real time via Server-Sent Events (SSE).
 * **Cryptographic Webhook Security**: Incoming Razorpay payment notifications are validated via HMAC-SHA256 signature verification using `RAZORPAY_WEBHOOK_SECRET` before marking orders as paid.
 
----
-
-## 📄 License
-This project is open source and available under the [MIT License](LICENSE).
