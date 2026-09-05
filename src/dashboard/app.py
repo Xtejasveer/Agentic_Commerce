@@ -9,7 +9,7 @@ import logging
 import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from src.database.session import Base, engine
@@ -61,38 +61,38 @@ def _react_index():
     idx = os.path.join(_frontend_dist, "index.html")
     return idx if os.path.exists(idx) else None
 
+def _serve_spa():
+    idx = _react_index()
+    if idx and os.path.exists(idx):
+        return FileResponse(idx)
+    return HTMLResponse(
+        "<h2>Frontend build initializing or not found. Please ensure frontend/dist is present.</h2>",
+        status_code=503
+    )
+
 # Mount the static assets (JS/CSS chunks) under /assets
 _assets_dir = os.path.join(_frontend_dist, "assets")
 if os.path.isdir(_assets_dir):
     app.mount("/assets", StaticFiles(directory=_assets_dir), name="react-assets")
 
-# SPA fallback routes — serve index.html for all page routes
-# React Router handles navigation client-side
+# SPA page routes — React Router handles navigation client-side
 @app.get("/")
-def root(request: Request):
-    return RedirectResponse(url="/login")
+def root():
+    return _serve_spa()
 
 @app.get("/login")
-def login_page(request: Request):
-    idx = _react_index()
-    if idx:
-        return FileResponse(idx)
-    return RedirectResponse(url="/")
+def login_page():
+    return _serve_spa()
 
 @app.get("/landing")
 def landing_page():
-    idx = _react_index()
-    if idx:
-        return FileResponse(idx)
-    return RedirectResponse(url="/login")
+    return _serve_spa()
 
 @app.get("/demo")
 def demo_page():
-    idx = _react_index()
-    if idx:
-        return FileResponse(idx)
-    return RedirectResponse(url="/login")
+    return _serve_spa()
 
-# Serve any other static files from frontend/dist root (favicon, etc.)
+# Serve any other static files from frontend/dist root (favicon, icons, etc.)
 if os.path.isdir(_frontend_dist):
     app.mount("/", StaticFiles(directory=_frontend_dist, html=True), name="react-root")
+
