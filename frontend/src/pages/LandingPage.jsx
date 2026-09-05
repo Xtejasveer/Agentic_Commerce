@@ -91,7 +91,7 @@ export default function LandingPage() {
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#c4622d] to-[#e59440] flex items-center justify-center shadow-sm">
               <Bot className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-lg tracking-tight text-[#1c1008]">Agentic Commerce</span>
+            <span className="font-bold text-lg tracking-tight text-[#1c1008]">VendIQ</span>
           </div>
           <div className="flex items-center gap-3">
             {user ? (
@@ -191,7 +191,7 @@ export default function LandingPage() {
               <div className="w-3 h-3 rounded-full bg-red-400/80" />
               <div className="w-3 h-3 rounded-full bg-amber-400/80" />
               <div className="w-3 h-3 rounded-full bg-emerald-400/80" />
-              <span className="ml-3 text-xs text-[#7d6050] font-mono">Agentic Commerce · Live Demo Console</span>
+              <span className="ml-3 text-xs text-[#7d6050] font-mono">VendIQ · Live Demo Console</span>
             </div>
             {/* Mock feed */}
             <div className="p-6 space-y-3 font-mono text-sm">
@@ -311,7 +311,7 @@ export default function LandingPage() {
             <div className="w-6 h-6 rounded-md bg-gradient-to-br from-[#c4622d] to-[#e59440] flex items-center justify-center">
               <Bot className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="text-sm font-semibold text-[#5c3d28]">Agentic Commerce</span>
+            <span className="text-sm font-semibold text-[#5c3d28]">VendIQ</span>
           </div>
           <p className="text-xs text-[#9a7060]">Built with LangGraph · FastAPI · MCP · Razorpay</p>
         </div>

@@ -1,4 +1,4 @@
-# 🛒 Agentic Commerce: AI-Native Merchant Infrastructure
+# 🛒 VendIQ: AI-Native Merchant Infrastructure
 
 > **An autonomous Agent-to-Merchant transaction platform powered by the Model Context Protocol (MCP), LangGraph, FastAPI, PostgreSQL, and ChromaDB.**
 
@@ -15,7 +15,7 @@
 
 As autonomous AI agents (personal assistants, enterprise procurement bots, OpenAI Operator, Claude Desktop) become the primary consumers on the internet, e-commerce infrastructure must transition from human-facing click funnels to **machine-readable, policy-governed endpoints**.
 
-**Agentic Commerce** provides the complete reference architecture for an **AI-Native Merchant**. It enables autonomous buyer agents to discover products, negotiate dynamic bundles, validate organizational spending mandates, and execute transactions programmatically via the **Model Context Protocol (MCP)** — with built-in **Human-in-the-Loop (HITL)** governance and real-time observability.
+**VendIQ** provides the complete reference architecture for an **AI-Native Merchant**. It enables autonomous buyer agents to discover products, negotiate dynamic bundles, validate organizational spending mandates, and execute transactions programmatically via the **Model Context Protocol (MCP)** — with built-in **Human-in-the-Loop (HITL)** governance and real-time observability.
 
 ---
 
@@ -42,7 +42,7 @@ flowchart TD
         Claude["Claude Desktop / External AI Agents"]
     end
 
-    subgraph Core["Agentic Commerce Core Gateway"]
+    subgraph Core["VendIQ Core Gateway"]
         API["FastAPI Web Server<br/>• REST APIs & Auth<br/>• Real-Time SSE Audit Stream<br/>• SPA Static Hosting"]
         MCP["FastMCP Server<br/>• search_products<br/>• validate_purchase_mandate<br/>• suggest_addon<br/>• execute_purchase"]
         
@@ -164,15 +164,15 @@ Add this server to your Claude Desktop configuration file:
 ```json
 {
   "mcpServers": {
-    "agentic-commerce": {
+    "vendiq": {
       "command": "python",
       "args": [
-        "/absolute/path/to/Agentic_Commerce/main.py",
+        "/absolute/path/to/VendIQ/main.py",
         "mcp"
       ],
       "env": {
-        "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/agentic_commerce",
-        "CHROMA_PERSIST_DIR": "/absolute/path/to/Agentic_Commerce/chroma_db",
+        "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/vendiq",
+        "CHROMA_PERSIST_DIR": "/absolute/path/to/VendIQ/chroma_db",
         "RAZORPAY_KEY_ID": "rzp_test_your_key_id",
         "RAZORPAY_KEY_SECRET": "your_key_secret"
       }

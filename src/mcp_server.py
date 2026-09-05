@@ -18,7 +18,7 @@ from src.schemas.audit import AuditEventType
 # Server Initialization
 
 mcp = FastMCP(
-    name = "AgenticCommerceMerchant",
+    name = "VendIQMerchant",
     instructions=(
         "You are connected to an AI-native electronics merchant."
         "Use search_products to find items, get_product_details to verify stock, "

@@ -1,7 +1,7 @@
 [project]
-name = "agentic-commerce"
+name = "vendiq"
 version = "0.1.0"
-description = "AI-native merchant infrastructure — MCP gateway for AI buyers"
+description = "VendIQ — AI-native merchant infrastructure & MCP gateway for AI buyers"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

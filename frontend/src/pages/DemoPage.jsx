@@ -898,7 +898,7 @@ export default function DemoPage() {
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#c4622d] to-[#e59440] flex items-center justify-center">
               <Bot className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold text-sm text-[#1c1008] hidden sm:block">Agentic Commerce</span>
+            <span className="font-bold text-sm text-[#1c1008] hidden sm:block">VendIQ</span>
           </button>
           <div className="h-4 w-px bg-[#e8ddd0] hidden sm:block" />
           <span className="text-xs text-[#b08070] hidden sm:block">Live Demo Console</span>

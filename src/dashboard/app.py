@@ -22,7 +22,7 @@ logging.basicConfig(
 )
 
 app = FastAPI(
-    title="Agentic Commerce - Merchant Dashboard",
+    title="VendIQ - Merchant Dashboard",
     description=(
         "Real-time audit trail and order management for the AI-native merchant."
         "Every agent action is logged here - approvals, rejections, payments"

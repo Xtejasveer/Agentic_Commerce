@@ -1,5 +1,5 @@
 """
-Agentic Commerce — Main Entrypoint
+VendIQ — Main Entrypoint
 Usage:
     # Start the merchant dashboard (FastAPI)
     python main.py dashboard
@@ -16,7 +16,7 @@ def run_dashboard():
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
     is_prod = os.environ.get("ENVIRONMENT", "development") == "production"
-    print(f"Starting Merchant Dashboard on http://0.0.0.0:{port}")
+    print(f"Starting VendIQ Merchant Dashboard on http://0.0.0.0:{port}")
     print(f"Audit trail:  http://0.0.0.0:{port}/api/audit")
     print(f"Live stream:  http://0.0.0.0:{port}/api/audit/stream")
     print(f"API docs:     http://0.0.0.0:{port}/docs\n")

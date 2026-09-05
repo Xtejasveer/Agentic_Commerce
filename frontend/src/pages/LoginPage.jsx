@@ -111,7 +111,7 @@ export default function LoginPage() {
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#c4622d] to-[#e59440] flex items-center justify-center shadow-lg shadow-[#c4622d]/30">
             <Bot className="w-6 h-6 text-white" />
           </div>
-          <span className="font-bold text-xl tracking-tight text-[#fdf4ec]">Agentic Commerce</span>
+          <span className="font-bold text-xl tracking-tight text-[#fdf4ec]">VendIQ</span>
         </div>
 
         {/* Tagline */}
@@ -158,7 +158,7 @@ export default function LoginPage() {
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#c4622d] to-[#e59440] flex items-center justify-center">
               <Bot className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold text-lg text-[#1c1008]">Agentic Commerce</span>
+            <span className="font-bold text-lg text-[#1c1008]">VendIQ</span>
           </div>
 
           {/* Card */}
