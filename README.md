@@ -4,8 +4,7 @@
 
 > **An autonomous Agent-to-Merchant transaction platform powered by the Model Context Protocol (MCP), LangGraph, FastAPI, PostgreSQL, and ChromaDB.**
 
-[![Live Demo](https://img.shields.io/badge/Live_Demo-Railway-0B0D0E?style=for-the-badge&logo=railway&logoColor=white)](https://agenticcommerce-production-cce1.up.railway.app/landing)
-[![Launch Console](https://img.shields.io/badge/Launch_Console-Demo-c4622d?style=for-the-badge)](https://agenticcommerce-production-cce1.up.railway.app/demo)
+[![Live Application](https://img.shields.io/badge/Live_Application-Login-c4622d?style=for-the-badge&logo=railway&logoColor=white)](https://agenticcommerce-production-cce1.up.railway.app/login)
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2.0-1C3C3C.svg?style=flat)](https://github.com/langchain-ai/langgraph)
@@ -16,10 +15,9 @@
 
 ---
 
-## 🌐 Live Deployment & Links
+## 🌐 Live Application & Links
 
-* 🔗 **Live Website & Overview**: **[https://agenticcommerce-production-cce1.up.railway.app/landing](https://agenticcommerce-production-cce1.up.railway.app/landing)**
-* 🎮 **Interactive Demo Console**: **[https://agenticcommerce-production-cce1.up.railway.app/demo](https://agenticcommerce-production-cce1.up.railway.app/demo)**
+* 🔐 **Live Application (Sign In)**: **[https://agenticcommerce-production-cce1.up.railway.app/login](https://agenticcommerce-production-cce1.up.railway.app/login)**
 * 📁 **GitHub Repository**: **[https://github.com/Xtejasveer/Agentic_Commerce](https://github.com/Xtejasveer/Agentic_Commerce)**
 
 ---
