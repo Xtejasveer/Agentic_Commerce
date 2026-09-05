@@ -106,7 +106,7 @@ sequenceDiagram
         Note over Agent, User: 3. Upsell Pitch & HITL Feedback
         Agent->>MCP: suggest_addon(primary_product)
         MCP-->>Agent: Proposes "Braided USB-C Cable (₹499)"
-        Agent->>Agent: Evaluates pitch; pauses workflow
+        Agent->>Agent: Evaluates pitch and pauses workflow
         Agent-->>User: Renders Interactive Upsell Approval Card
         User->>Agent: Clicks "Accept" or "Decline"
     end
@@ -176,73 +176,25 @@ Agentic Commerce/
 
 ---
 
-## 🛠️ Getting Started Locally
+## ⚙️ Environment Variables
 
-### 1. Prerequisites
-- **Python 3.12+**
-- **Node.js 18+** & **npm**
-- **PostgreSQL 14+** running locally (or via Docker)
+The application relies on the following environment variables:
 
-### 2. Clone & Setup Environment
-```bash
-git clone https://github.com/Xtejasveer/Agentic_Commerce.git
-cd Agentic_Commerce
-
-# Create and activate virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Install frontend dependencies and build production assets
-cd frontend
-npm install
-npm run build
-cd ..
-```
-
-### 3. Configure Environment Variables
-Create a `.env` file in the project root:
-
-```env
-# Database (PostgreSQL)
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_commerce
-
-# OpenRouter (LLM for Buyer Agent)
-OPENROUTER_API_KEY=your_openrouter_api_key
-OPENROUTER_MODEL=google/gemini-2.5-flash
-OPENAI_API_KEY=your_openrouter_api_key
-
-# Razorpay (Test Mode)
-RAZORPAY_KEY_ID=rzp_test_your_key_id
-RAZORPAY_KEY_SECRET=your_key_secret
-RAZORPAY_WEBHOOK_SECRET=mock_webhook_secret
-
-# ChromaDB
-CHROMA_PERSIST_DIR=./chroma_db
-
-# Google OAuth (Optional)
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-
-# Application
-ENVIRONMENT=development
-LOG_LEVEL=INFO
-```
-
-### 4. Seed Database & Vector Store
-Initialize the PostgreSQL schema, seed all 50 electronics products across 12 categories, generate dense vector embeddings in ChromaDB, and set up the default buyer agent mandate:
-```bash
-python main.py seed
-```
-
-### 5. Launch the Application
-Start the unified FastAPI backend (which serves both the API and the React SPA):
-```bash
-python main.py dashboard
-```
-Visit **[http://localhost:8000](http://localhost:8000)** in your browser!
+| Variable | Description | Example / Default |
+| :--- | :--- | :--- |
+| `DATABASE_URL` | PostgreSQL connection URI | `postgresql://postgres:password@host:5432/dbname` |
+| `OPENROUTER_API_KEY` | OpenRouter API Key for agent LLM inference | `sk-or-v1-...` |
+| `OPENAI_API_KEY` | Mirrored API Key required by LangChain OpenAI adapters | `sk-or-v1-...` |
+| `OPENROUTER_MODEL` | LLM model identifier on OpenRouter | `google/gemini-2.5-flash` |
+| `RAZORPAY_KEY_ID` | Razorpay Key ID (Test Mode) | `rzp_test_...` |
+| `RAZORPAY_KEY_SECRET` | Razorpay Key Secret | `your_secret` |
+| `RAZORPAY_WEBHOOK_SECRET`| Webhook verification secret | `mock_webhook_secret` |
+| `CHROMA_PERSIST_DIR` | Directory for persistent vector embeddings | `./chroma_db` |
+| `MCP_TRANSPORT` | MCP server transport protocol | `stdio` |
+| `GOOGLE_CLIENT_ID` | Google OAuth Client ID for dashboard authentication | `your_client_id.apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth Client Secret | `your_client_secret` |
+| `ENVIRONMENT` | Environment runtime mode | `production` |
+| `LOG_LEVEL` | Logging verbosity | `INFO` |
 
 ---
 
@@ -259,14 +211,14 @@ Add this server to your Claude Desktop configuration file:
 {
   "mcpServers": {
     "agentic-commerce": {
-      "command": "/path/to/Agentic_Commerce/.venv/bin/python",
+      "command": "python",
       "args": [
-        "/path/to/Agentic_Commerce/main.py",
+        "/absolute/path/to/Agentic_Commerce/main.py",
         "mcp"
       ],
       "env": {
         "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/agentic_commerce",
-        "CHROMA_PERSIST_DIR": "/path/to/Agentic_Commerce/chroma_db",
+        "CHROMA_PERSIST_DIR": "/absolute/path/to/Agentic_Commerce/chroma_db",
         "RAZORPAY_KEY_ID": "rzp_test_your_key_id",
         "RAZORPAY_KEY_SECRET": "your_key_secret"
       }
@@ -277,36 +229,20 @@ Add this server to your Claude Desktop configuration file:
 
 ### 2. Available MCP Tools
 When Claude Desktop connects, it automatically gains access to:
+
 | Tool Name | Parameters | Description |
 | :--- | :--- | :--- |
-| `search_products` | `query: str`, `top_k: int` | Performs semantic vector search over the product catalog using ChromaDB. |
-| `validate_purchase_mandate` | `product_id: str`, `price: float`, `category: str` | Validates proposed items against spending budgets and category policies. |
-| `suggest_addon` | `product_id: str` | Merchant upsell engine proposing bundles, discounts, and accessories. |
+| `search_products` | `query: str`, `top_k: int` | Performs dense semantic vector search over the 50-product catalog using ChromaDB. |
+| `validate_purchase_mandate` | `product_id: str`, `price: float`, `category: str` | Validates candidate purchases against spending budgets and category white-lists. |
+| `suggest_addon` | `product_id: str` | Merchant upsell engine proposing complementary bundles and accessories. |
 | `execute_purchase` | `product_id: str`, `cart: list` | Atomically executes stock reservation, policy verification, and payment link creation. |
-
----
-
-## 🚢 Deploying to Railway
-
-The repository includes a ready-to-deploy [`nixpacks.toml`](nixpacks.toml) and [`Procfile`](Procfile) for seamless container deployment on [Railway](https://railway.app):
-
-1. **Create a Railway Project**: Go to Railway, create a new project, and select **Add PostgreSQL**.
-2. **Add GitHub Repository**: Select `Xtejasveer/Agentic_Commerce`.
-3. **Configure Variables**:
-   - Set `DATABASE_URL` to `${{Postgres.DATABASE_URL}}`.
-   - Add your `OPENROUTER_API_KEY` and `ENVIRONMENT=production`.
-4. **Generate Public Domain**: In Service Settings → Networking, click **Generate Domain**.
-5. **Seed Production Data**: In the Railway Console / Exec tab, run:
-   ```bash
-   python main.py seed
-   ```
 
 ---
 
 ## 🔒 Security & Policy Governance
 
 - **Deterministic Defense-in-Depth**: Policy checks are executed both at the agent reasoning level and enforced independently inside the transactional database layer before payment link generation.
-- **Idempotency Guard**: Prevents accidental re-purchases of identical items within configurable time windows.
+- **Idempotency Guard**: Prevents accidental duplicate purchases of identical items within configurable time windows.
 - **Audit Immutability**: Every policy decision (`POLICY_APPROVED`, `POLICY_REJECTED`, `UPSELL_PROPOSED`, `PAYMENT_SUCCESS`) is logged with timestamps, agent IDs, and full rationale traces.
 
 ---
