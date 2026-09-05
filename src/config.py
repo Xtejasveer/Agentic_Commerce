@@ -4,9 +4,15 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 class Settings:
-    DATABASE_URL:str = os.getenv(
+    _raw_db_url: str = os.getenv(
         "DATABASE_URL",
         "postgresql://postgres:postgres@localhost:5432/agentic_commerce"
+    )
+    # Railway and Heroku provide postgres:// which SQLAlchemy 1.4+ rejects in favor of postgresql://
+    DATABASE_URL: str = (
+        _raw_db_url.replace("postgres://", "postgresql://", 1)
+        if _raw_db_url.startswith("postgres://")
+        else _raw_db_url
     )
     RAZORPAY_KEY_ID: str = os.getenv("RAZORPAY_KEY_ID", "rzp_test_mock_key")
     RAZORPAY_KEY_SECRET: str = os.getenv("RAZORPAY_KEY_SECRET","mock_secret")

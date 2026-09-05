@@ -12,16 +12,19 @@ Usage:
 import sys
 
 def run_dashboard():
+    import os
     import uvicorn
-    print("Starting Merchant Dashboard on http://localhost:8000")
-    print("Audit trail:  http://localhost:8000/api/audit")
-    print("Live stream:  http://localhost:8000/api/audit/stream")
-    print("API docs:     http://localhost:8000/docs\n")
+    port = int(os.environ.get("PORT", 8000))
+    is_prod = os.environ.get("ENVIRONMENT", "development") == "production"
+    print(f"Starting Merchant Dashboard on http://0.0.0.0:{port}")
+    print(f"Audit trail:  http://0.0.0.0:{port}/api/audit")
+    print(f"Live stream:  http://0.0.0.0:{port}/api/audit/stream")
+    print(f"API docs:     http://0.0.0.0:{port}/docs\n")
     uvicorn.run(
         "src.dashboard.app:app",
         host = "0.0.0.0",
-        port = 8000,
-        reload = True,
+        port = port,
+        reload = not is_prod,
     )
 
 def run_mcp():
