@@ -53,12 +53,15 @@
     <div class="panel">
         <div class="panel-header">
             <span>🧑‍💻 Buyer Console</span>
-            <select id="agent-select">
-                <option value="agent-buyer-01">agent-buyer-01 (₹5k limit, all categories)</option>
-            </select>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <select id="agent-select">
+                    <!-- Populated dynamically via /api/mandates -->
+                </select>
+                <button id="btn-new-agent" onclick="openAgentModal()" style="padding: 8px 12px; font-size: 0.85em; background: #28a745; white-space: nowrap;">+ New Agent</button>
+            </div>
         </div>
         <div id="chat-container">
-            <div class="message msg-system">Select an agent and enter a prompt to begin. Try: "Buy me a fast charger under 2000" or "Buy the Sony WF-C700N Earbuds"</div>
+            <div class="message msg-system">Select an agent or create a new one to test custom corporate mandates.</div>
         </div>
         <div id="input-area">
             <input type="text" id="chat-input" placeholder="Type your request here..." onkeypress="if(event.key === 'Enter') sendChat()">
@@ -70,7 +73,14 @@
     <div class="panel">
         <div class="panel-header">
             <span>🛡️ Merchant Policy Engine (Live Feed)</span>
-            <span style="font-size: 0.8em; color: #666;" id="conn-status">🟡 Connecting...</span>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 0.8em; color: #666;" id="conn-status">🟡 Connecting...</span>
+                <div id="user-profile-badge" style="display: none; align-items: center; gap: 8px; font-size: 0.82em; background: #eef2f7; padding: 4px 10px; border-radius: 20px; border: 1px solid #dcdfe6;">
+                    <img id="user-avatar" src="" style="width: 20px; height: 20px; border-radius: 50%;">
+                    <span id="user-display-name" style="font-weight: 600; color: #333;">User</span>
+                    <button onclick="logout()" style="padding: 2px 6px; font-size: 0.75em; background: transparent; color: #dc3545; border: 1px solid #dc3545; border-radius: 4px; cursor: pointer;">Sign Out</button>
+                </div>
+            </div>
         </div>
         
         <!-- Live Intelligence KPI Bar -->
@@ -97,12 +107,148 @@
         </div>
     </div>
 
+    <!-- Create Agent Modal -->
+    <div id="agent-modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center;">
+        <div style="background: #fff; border-radius: 8px; width: 440px; max-width: 90%; padding: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid #eee; padding-bottom: 8px;">
+                <h3 style="margin: 0; font-size: 1.15em; color: #212529;">Create Custom Buyer Agent</h3>
+                <span onclick="closeAgentModal()" style="cursor: pointer; font-size: 1.5em; font-weight: bold; color: #888;">&times;</span>
+            </div>
+            <form id="agent-form" onsubmit="createAgent(event)">
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 0.85em; font-weight: 600; margin-bottom: 4px; color: #495057;">Agent Identifier</label>
+                    <input type="text" id="m-agent-id" placeholder="e.g. agent-intern-alex" required style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 0.85em; font-weight: 600; margin-bottom: 4px; color: #495057;">Max Single Txn (₹)</label>
+                        <input type="number" id="m-max-single" value="2000" min="100" required style="width: 100%; box-sizing: border-box;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.85em; font-weight: 600; margin-bottom: 4px; color: #495057;">Daily Budget (₹)</label>
+                        <input type="number" id="m-max-daily" value="5000" min="100" required style="width: 100%; box-sizing: border-box;">
+                    </div>
+                </div>
+                <div style="margin-bottom: 14px;">
+                    <label style="display: block; font-size: 0.85em; font-weight: 600; margin-bottom: 4px; color: #495057;">Human Approval Threshold (₹, optional)</label>
+                    <input type="number" id="m-approval-above" placeholder="Leave empty if none" style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div style="margin-bottom: 18px;">
+                    <label style="display: block; font-size: 0.85em; font-weight: 600; margin-bottom: 8px; color: #495057;">Allowed Categories Whitelist</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.9em; background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #e9ecef;">
+                        <label style="cursor: pointer;"><input type="checkbox" name="cat" value="chargers" checked> Chargers</label>
+                        <label style="cursor: pointer;"><input type="checkbox" name="cat" value="cables" checked> Cables</label>
+                        <label style="cursor: pointer;"><input type="checkbox" name="cat" value="power_banks" checked> Power Banks</label>
+                        <label style="cursor: pointer;"><input type="checkbox" name="cat" value="earbuds"> Earbuds</label>
+                        <label style="cursor: pointer;"><input type="checkbox" name="cat" value="cases"> Cases</label>
+                        <label style="cursor: pointer;"><input type="checkbox" name="cat" value="screen_protectors"> Screen Guards</label>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button type="button" onclick="closeAgentModal()" style="background: #e2e6ea; color: #333;">Cancel</button>
+                    <button type="submit" id="btn-save-agent" style="background: #28a745;">Save & Activate</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         const chatContainer = document.getElementById('chat-container');
         const auditContainer = document.getElementById('audit-container');
         const inputField = document.getElementById('chat-input');
         const sendBtn = document.getElementById('send-btn');
         const agentSelect = document.getElementById('agent-select');
+
+        function openAgentModal() {
+            document.getElementById('agent-modal').style.display = 'flex';
+            document.getElementById('m-agent-id').focus();
+        }
+
+        function closeAgentModal() {
+            document.getElementById('agent-modal').style.display = 'none';
+        }
+
+        async function fetchMandates(selectedId = null) {
+            try {
+                const res = await fetch('/api/mandates');
+                if (res.ok) {
+                    const mandates = await res.json();
+                    agentSelect.innerHTML = '';
+                    mandates.forEach(m => {
+                        const opt = document.createElement('option');
+                        opt.value = m.agent_id;
+                        const catSummary = m.allowed_categories.length > 2 
+                            ? `${m.allowed_categories.slice(0, 2).join(', ')} +${m.allowed_categories.length - 2}`
+                            : m.allowed_categories.join(', ');
+                        opt.textContent = `${m.agent_id} (₹${m.max_single_txn_inr.toLocaleString()} limit · ${catSummary})`;
+                        if (selectedId && m.agent_id === selectedId) {
+                            opt.selected = true;
+                        }
+                        agentSelect.appendChild(opt);
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to fetch mandates:', err);
+            }
+        }
+
+        // Fetch on load
+        fetchMandates();
+
+        async function createAgent(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-save-agent');
+            btn.disabled = true;
+
+            const agentId = document.getElementById('m-agent-id').value.trim();
+            const maxSingle = parseFloat(document.getElementById('m-max-single').value);
+            const maxDaily = parseFloat(document.getElementById('m-max-daily').value);
+            const approvalVal = document.getElementById('m-approval-above').value;
+            const approvalAbove = approvalVal ? parseFloat(approvalVal) : null;
+
+            const checkboxes = document.querySelectorAll('input[name="cat"]:checked');
+            const categories = Array.from(checkboxes).map(cb => cb.value);
+
+            if (categories.length === 0) {
+                alert('Please select at least one allowed category.');
+                btn.disabled = false;
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/mandates', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        agent_id: agentId,
+                        max_single_txn_inr: maxSingle,
+                        max_daily_spend_inr: maxDaily,
+                        allowed_categories: categories,
+                        requires_approval_above_inr: approvalAbove
+                    })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    closeAgentModal();
+                    await fetchMandates(data.agent_id);
+                    appendMessage('system', `✨ Agent '${data.agent_id}' created and activated! Mandate: ₹${maxSingle.toLocaleString()} cap, categories: [${categories.join(', ')}]. Ready to chat!`);
+                } else {
+                    let errMsg = 'Failed to create agent';
+                    try {
+                        const errData = await res.json();
+                        errMsg = errData.detail || errMsg;
+                    } catch (_) {
+                        errMsg = await res.text();
+                    }
+                    alert(`Error: ${errMsg}`);
+                }
+            } catch (err) {
+                alert(`Error while creating agent: ${err.message || err}`);
+            } finally {
+                btn.disabled = false;
+            }
+        }
 
         async function fetchStats() {
             try {
@@ -120,6 +266,34 @@
                 console.error('Failed to fetch stats:', err);
             }
         }
+
+        async function checkUserAuth() {
+            try {
+                const res = await fetch('/api/auth/me');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.user) {
+                        document.getElementById('user-profile-badge').style.display = 'flex';
+                        document.getElementById('user-avatar').src = data.user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.user.email}`;
+                        document.getElementById('user-display-name').textContent = data.user.name || data.user.email;
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to fetch user auth:', err);
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+                window.location.href = '/login';
+            } catch (err) {
+                window.location.href = '/login';
+            }
+        }
+
+        // Initialize user profile
+        checkUserAuth();
 
         // Fetch initial stats on load
         fetchStats();

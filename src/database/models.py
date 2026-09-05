@@ -10,6 +10,18 @@ from src.database.session import Base
 def generate_uuid():
     return str(uuid.uuid4())
 
+class UserRecord(Base):
+    """Registered human user / corporate administrator."""
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=True)
+    avatar_url = Column(String(500), nullable=True)
+    auth_provider = Column(String(50), nullable=False, default="local")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 class ProductRecord(Base):
     """Relational mirror of the ChromaDB catalog - used for SQL queries."""
     __tablename__ = "products"
@@ -29,6 +41,7 @@ class AgentMandateRecord(Base):
     __tablename__ = "agent_mandates"
 
     agent_id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=True)
     api_key = Column(String, nullable=False)
     max_single_txn_inr = Column(Float, nullable=False)
     max_daily_spend_inr = Column(Float, nullable=False)

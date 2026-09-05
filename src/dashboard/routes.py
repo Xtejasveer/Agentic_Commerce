@@ -6,21 +6,221 @@ import json
 import asyncio
 import logging
 from datetime import date
-from fastapi import APIRouter, Depends, HTTPException, Request, Header
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Request, Header, Response
+from fastapi.responses import StreamingResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, cast, Date
 from typing import Optional
+import hashlib
+import secrets
+import urllib.request
+import urllib.parse
 
 from src.database.session import get_db
-from src.database.models import AuditLogRecord, OrderRecord, AgentMandateRecord, ProductRecord
+from src.database.models import AuditLogRecord, OrderRecord, AgentMandateRecord, ProductRecord, UserRecord
 from src.payments.razorpay_client import verify_webhook_signature
 from src.config import settings
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from src.agent.buyer import run_buyer_agent
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Password hashing utilities
+def hash_password(password: str) -> str:
+    salt = secrets.token_hex(16)
+    key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
+    return f"{salt}${key.hex()}"
+
+def verify_password(stored_hash: str, password: str) -> bool:
+    if not stored_hash or "$" not in stored_hash:
+        return False
+    salt, key_hex = stored_hash.split("$", 1)
+    test_key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
+    return secrets.compare_digest(key_hex, test_key.hex())
+
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> Optional[UserRecord]:
+    user_id = request.cookies.get("agentic_session")
+    if not user_id:
+        return None
+    return db.query(UserRecord).filter(UserRecord.id == user_id).first()
+
+# Auth Schemas
+class RegisterRequest(BaseModel):
+    email: str
+    name: str
+    password: str
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class GoogleTokenRequest(BaseModel):
+    credential: str
+
+## Auth Endpoints
+@router.post("/auth/register")
+def register_user(req: RegisterRequest, response: Response, db: Session = Depends(get_db)):
+    clean_email = req.email.strip().lower()
+    existing = db.query(UserRecord).filter(UserRecord.email == clean_email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="An account with this email already exists.")
+    
+    user = UserRecord(
+        email=clean_email,
+        name=req.name.strip(),
+        password_hash=hash_password(req.password),
+        avatar_url=f"https://api.dicebear.com/7.x/avataaars/svg?seed={clean_email}",
+        auth_provider="local"
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    response.set_cookie(key="agentic_session", value=user.id, httponly=True, samesite="lax", max_age=86400*7)
+    return {"status": "ok", "user": {"id": user.id, "email": user.email, "name": user.name, "avatar_url": user.avatar_url}}
+
+@router.post("/auth/login")
+def login_user(req: LoginRequest, response: Response, db: Session = Depends(get_db)):
+    clean_email = req.email.strip().lower()
+    user = db.query(UserRecord).filter(UserRecord.email == clean_email).first()
+    if not user or not verify_password(user.password_hash or "", req.password):
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    
+    response.set_cookie(key="agentic_session", value=user.id, httponly=True, samesite="lax", max_age=86400*7)
+    return {"status": "ok", "user": {"id": user.id, "email": user.email, "name": user.name, "avatar_url": user.avatar_url}}
+
+@router.get("/auth/google/config")
+def get_google_config():
+    """Returns whether Google OAuth is configured and its client ID."""
+    return {
+        "configured": bool(settings.GOOGLE_CLIENT_ID),
+        "client_id": settings.GOOGLE_CLIENT_ID or ""
+    }
+
+@router.get("/auth/google/login")
+def google_oauth_login(request: Request):
+    """Redirects the browser to Google's real OAuth 2.0 consent screen."""
+    if not settings.GOOGLE_CLIENT_ID:
+        return RedirectResponse(url="/login?error=google_not_configured")
+    
+    redirect_uri = f"{str(request.base_url).rstrip('/')}/api/auth/google/callback"
+    params = {
+        "client_id": settings.GOOGLE_CLIENT_ID,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+        "prompt": "select_account"
+    }
+    google_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urllib.parse.urlencode(params)}"
+    return RedirectResponse(url=google_url)
+
+@router.get("/auth/google/callback")
+def google_oauth_callback(code: Optional[str] = None, error: Optional[str] = None, request: Request = None, db: Session = Depends(get_db)):
+    """Handles Google OAuth callback, exchanges code for user profile, and creates session."""
+    if error or not code:
+        return RedirectResponse(url=f"/login?error={error or 'cancelled'}")
+    
+    redirect_uri = f"{str(request.base_url).rstrip('/')}/api/auth/google/callback"
+    
+    # 1. Exchange authorization code for tokens
+    token_url = "https://oauth2.googleapis.com/token"
+    token_payload = urllib.parse.urlencode({
+        "code": code,
+        "client_id": settings.GOOGLE_CLIENT_ID,
+        "client_secret": settings.GOOGLE_CLIENT_SECRET,
+        "redirect_uri": redirect_uri,
+        "grant_type": "authorization_code",
+    }).encode("utf-8")
+
+    try:
+        token_req = urllib.request.Request(token_url, data=token_payload, method="POST")
+        with urllib.request.urlopen(token_req) as resp:
+            token_data = json.loads(resp.read().decode("utf-8"))
+        
+        access_token = token_data.get("access_token")
+        
+        # 2. Fetch user profile from Google
+        userinfo_url = "https://www.googleapis.com/oauth2/v3/userinfo"
+        user_req = urllib.request.Request(userinfo_url, headers={"Authorization": f"Bearer {access_token}"})
+        with urllib.request.urlopen(user_req) as resp:
+            user_info = json.loads(resp.read().decode("utf-8"))
+        
+        email = user_info["email"].lower().strip()
+        name = user_info.get("name", email.split("@")[0])
+        avatar_url = user_info.get("picture")
+
+        # 3. Create or find user in PostgreSQL
+        user = db.query(UserRecord).filter(UserRecord.email == email).first()
+        if not user:
+            user = UserRecord(
+                email=email,
+                name=name,
+                avatar_url=avatar_url,
+                auth_provider="google"
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        else:
+            if avatar_url and not user.avatar_url:
+                user.avatar_url = avatar_url
+                db.commit()
+
+        # 4. Set session cookie and redirect to dashboard
+        response = RedirectResponse(url="/", status_code=302)
+        response.set_cookie(key="agentic_session", value=user.id, httponly=True, samesite="lax", max_age=86400*7)
+        return response
+
+    except Exception as e:
+        logger.error(f"Google OAuth exchange error: {e}")
+        return RedirectResponse(url="/login?error=oauth_failed")
+
+@router.post("/auth/google/token")
+def google_token_verify(req: GoogleTokenRequest, response: Response, db: Session = Depends(get_db)):
+    """Verifies a Google Identity Services (GIS) ID token and creates session."""
+    try:
+        verify_url = f"https://oauth2.googleapis.com/tokeninfo?id_token={req.credential}"
+        with urllib.request.urlopen(verify_url) as resp:
+            token_info = json.loads(resp.read().decode("utf-8"))
+        
+        if "email" not in token_info:
+            raise HTTPException(status_code=400, detail="Invalid Google token payload.")
+        
+        email = token_info["email"].lower().strip()
+        name = token_info.get("name", email.split("@")[0])
+        avatar_url = token_info.get("picture")
+
+        user = db.query(UserRecord).filter(UserRecord.email == email).first()
+        if not user:
+            user = UserRecord(
+                email=email,
+                name=name,
+                avatar_url=avatar_url,
+                auth_provider="google"
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+        response.set_cookie(key="agentic_session", value=user.id, httponly=True, samesite="lax", max_age=86400*7)
+        return {"status": "ok", "user": {"id": user.id, "email": user.email, "name": user.name, "avatar_url": user.avatar_url}}
+
+    except Exception as e:
+        logger.error(f"Google ID token verification failed: {e}")
+        raise HTTPException(status_code=400, detail=f"Google token verification failed: {str(e)}")
+
+@router.post("/auth/logout")
+def logout_user(response: Response):
+    response.delete_cookie("agentic_session")
+    return {"status": "logged_out"}
+
+@router.get("/auth/me")
+def get_auth_me(current_user: Optional[UserRecord] = Depends(get_current_user)):
+    if not current_user:
+        return {"user": None}
+    return {"user": {"id": current_user.id, "email": current_user.email, "name": current_user.name, "avatar_url": current_user.avatar_url}}
 
 # In-memory queue for SSE - audit events are pushed here and streamed to clients
 _sse_queue: asyncio.Queue = asyncio.Queue()
@@ -29,14 +229,83 @@ class ChatRequest(BaseModel):
     agent_id: str
     message: str
 
+class CreateMandateRequest(BaseModel):
+    agent_id: str
+    max_single_txn_inr: float
+    max_daily_spend_inr: float
+    allowed_categories: list[str]
+    requires_approval_above_inr: Optional[float] = None
+
+@router.get("/mandates")
+def list_agent_mandates(request: Request, db: Session = Depends(get_db)):
+    """List all active agent mandates scoped to the authenticated user, or public demo mandates."""
+    current_user = get_current_user(request, db)
+    query = db.query(AgentMandateRecord).filter(AgentMandateRecord.is_active == True)
+    
+    if current_user:
+        # Show user's agents plus legacy/system agents where user_id is None
+        from sqlalchemy import or_
+        query = query.filter(or_(AgentMandateRecord.user_id == current_user.id, AgentMandateRecord.user_id == None))
+
+    mandates = query.all()
+    return [
+        {
+            "agent_id": m.agent_id,
+            "max_single_txn_inr": m.max_single_txn_inr,
+            "max_daily_spend_inr": m.max_daily_spend_inr,
+            "allowed_categories": m.allowed_categories,
+            "requires_approval_above_inr": m.requires_approval_above_inr,
+            "is_owner": (m.user_id == current_user.id) if current_user else False,
+        }
+        for m in mandates
+    ]
+
+@router.post("/mandates")
+def create_agent_mandate(req: CreateMandateRequest, request: Request, db: Session = Depends(get_db)):
+    """Create or update an agent mandate in PostgreSQL assigned to the current user."""
+    clean_id = req.agent_id.strip().lower().replace(" ", "-")
+    current_user = get_current_user(request, db)
+    user_id = current_user.id if current_user else None
+
+    existing = db.query(AgentMandateRecord).filter(AgentMandateRecord.agent_id == clean_id).first()
+    if existing:
+        existing.max_single_txn_inr = req.max_single_txn_inr
+        existing.max_daily_spend_inr = req.max_daily_spend_inr
+        existing.allowed_categories = req.allowed_categories
+        existing.requires_approval_above_inr = req.requires_approval_above_inr
+        existing.is_active = True
+        if user_id:
+            existing.user_id = user_id
+        db.commit()
+        return {"status": "updated", "agent_id": clean_id, "api_key": existing.api_key}
+
+    api_key = f"key-{clean_id}-secret"
+    new_record = AgentMandateRecord(
+        agent_id=clean_id,
+        user_id=user_id,
+        api_key=api_key,
+        max_single_txn_inr=req.max_single_txn_inr,
+        max_daily_spend_inr=req.max_daily_spend_inr,
+        allowed_categories=req.allowed_categories,
+        requires_approval_above_inr=req.requires_approval_above_inr,
+        is_active=True,
+    )
+    db.add(new_record)
+    db.commit()
+    return {"status": "created", "agent_id": clean_id, "api_key": api_key}
+
 @router.post("/chat")
-async def chat_endpoint(request: ChatRequest):
+async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
     """
     Runs the LangGraph buyer agent in the background and returns its response.
+    Dynamically looks up the agent's real credentials from PostgreSQL.
     """
     try:
-        # Determine appropriate API key for the requested agent
-        api_key = "key-buyer-01-secret" if request.agent_id == "agent-buyer-01" else "key-buyer-02-secret"
+        # Dynamically look up the agent's real API key from PostgreSQL
+        mandate = db.query(AgentMandateRecord).filter(
+            AgentMandateRecord.agent_id == request.agent_id
+        ).first()
+        api_key = mandate.api_key if mandate else f"key-{request.agent_id}-secret"
         
         # Run agent
         state = await run_buyer_agent(

@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In — Agentic Commerce</title>
+    <!-- Google Identity Services SDK -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f0f2f5;
+            color: #1c1e21;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .login-card {
+            background: #ffffff;
+            width: 100%;
+            max-width: 440px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+            padding: 38px 32px;
+            margin: 20px;
+        }
+        .brand {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .brand-icon {
+            font-size: 2.2em;
+            margin-bottom: 8px;
+            display: inline-block;
+        }
+        .brand-title {
+            font-size: 1.45em;
+            font-weight: 700;
+            color: #111827;
+            margin: 0 0 6px 0;
+        }
+        .brand-subtitle {
+            font-size: 0.9em;
+            color: #6b7280;
+            margin: 0;
+        }
+        #google-btn-wrapper {
+            margin-bottom: 8px;
+        }
+        .btn-google {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            width: 100%;
+            padding: 11px 16px;
+            background: #ffffff;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 0.95em;
+            font-weight: 600;
+            color: #374151;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .btn-google:hover {
+            background: #f9fafb;
+            border-color: #9ca3af;
+        }
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 22px 0;
+            color: #9ca3af;
+            font-size: 0.82em;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .divider span {
+            padding: 0 12px;
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            font-size: 0.92em;
+            font-weight: 600;
+            color: #6b7280;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+        }
+        .tab-btn.active {
+            color: #007bff;
+            border-bottom-color: #007bff;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 0.85em;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 6px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px 12px;
+            font-size: 0.95em;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .form-group input:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+        }
+        .btn-submit {
+            width: 100%;
+            padding: 12px;
+            background: #007bff;
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .btn-submit:hover {
+            background: #0062cc;
+        }
+        .btn-submit:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        .alert {
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            margin-bottom: 16px;
+            display: none;
+            line-height: 1.4;
+        }
+        .alert-error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+        }
+        .alert-info {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            color: #1d4ed8;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="login-card">
+        <div class="brand">
+            <div class="brand-icon">⚡🛒</div>
+            <h1 class="brand-title">Agentic Commerce</h1>
+            <p class="brand-subtitle">AI-Native Merchant Infrastructure</p>
+        </div>
+
+        <div id="alert-box" class="alert"></div>
+
+        <!-- Google OAuth Section -->
+        <div id="google-btn-wrapper">
+            <button class="btn-google" id="custom-google-btn" type="button" onclick="triggerGoogleLogin()">
+                <svg width="18" height="18" viewBox="0 0 18 18">
+                    <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.616z"/>
+                    <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
+                    <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z"/>
+                    <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 7.293C4.672 5.166 6.656 3.58 9 3.58z"/>
+                </svg>
+                Continue with Google
+            </button>
+            <div id="g_id_render" style="display: none; width: 100%;"></div>
+        </div>
+
+        <div class="divider">
+            <span>or sign in with email</span>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" id="tab-login" onclick="setMode('login')">Sign In</button>
+            <button class="tab-btn" id="tab-register" onclick="setMode('register')">Create Account</button>
+        </div>
+
+        <form id="auth-form" onsubmit="handleAuth(event)">
+            <div class="form-group" id="group-name" style="display: none;">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" placeholder="e.g. Sarah Connor">
+            </div>
+
+            <div class="form-group">
+                <label for="email">Work Email</label>
+                <input type="email" id="email" placeholder="name@company.com" required>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="••••••••" required minlength="6">
+            </div>
+
+            <button type="submit" class="btn-submit" id="submit-btn">Sign In</button>
+        </form>
+    </div>
+
+    <script>
+        let currentMode = 'login';
+        let googleConfigured = false;
+        let googleClientId = '';
+
+        function setMode(mode) {
+            currentMode = mode;
+            const tabLogin = document.getElementById('tab-login');
+            const tabRegister = document.getElementById('tab-register');
+            const groupName = document.getElementById('group-name');
+            const submitBtn = document.getElementById('submit-btn');
+            hideAlert();
+
+            if (mode === 'register') {
+                tabRegister.classList.add('active');
+                tabLogin.classList.remove('active');
+                groupName.style.display = 'block';
+                document.getElementById('name').required = true;
+                submitBtn.textContent = 'Create Account';
+            } else {
+                tabLogin.classList.add('active');
+                tabRegister.classList.remove('active');
+                groupName.style.display = 'none';
+                document.getElementById('name').required = false;
+                submitBtn.textContent = 'Sign In';
+            }
+        }
+
+        function showAlert(msg, isInfo=false) {
+            const box = document.getElementById('alert-box');
+            box.textContent = msg;
+            box.className = `alert ${isInfo ? 'alert-info' : 'alert-error'}`;
+            box.style.display = 'block';
+        }
+
+        function hideAlert() {
+            const box = document.getElementById('alert-box');
+            box.style.display = 'none';
+        }
+
+        // Check query parameters for error codes
+        window.addEventListener('DOMContentLoaded', async () => {
+            const params = new URLSearchParams(window.location.search);
+            const err = params.get('error');
+            if (err === 'google_not_configured') {
+                showAlert("Google OAuth is enabled in code. To connect live Google Sign-In, please add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to your .env file.", true);
+            } else if (err === 'oauth_failed') {
+                showAlert("Google authentication could not be completed. Please try again or use email/password.");
+            } else if (err === 'access_denied') {
+                showAlert("Google sign-in was cancelled.");
+            }
+
+            // Fetch Google OAuth Config
+            try {
+                const res = await fetch('/api/auth/google/config');
+                if (res.ok) {
+                    const data = await res.json();
+                    googleConfigured = data.configured;
+                    googleClientId = data.client_id;
+                    
+                    if (googleConfigured) {
+                        let attempts = 0;
+                        const tryInit = () => {
+                            if (window.google && window.google.accounts) {
+                                initGoogleGIS(googleClientId);
+                            } else if (attempts < 20) {
+                                attempts++;
+                                setTimeout(tryInit, 150);
+                            }
+                        };
+                        tryInit();
+                    }
+                }
+            } catch (e) {
+                console.log('Google config lookup:', e);
+            }
+        });
+
+        function initGoogleGIS(clientId) {
+            google.accounts.id.initialize({
+                client_id: clientId,
+                callback: handleGoogleCredential
+            });
+            document.getElementById('custom-google-btn').style.display = 'none';
+            const renderDiv = document.getElementById('g_id_render');
+            renderDiv.style.display = 'block';
+            google.accounts.id.renderButton(renderDiv, {
+                theme: 'outline',
+                size: 'large',
+                width: 376,
+                text: 'continue_with'
+            });
+        }
+
+        async function handleGoogleCredential(response) {
+            try {
+                const res = await fetch('/api/auth/google/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ credential: response.credential })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    window.location.href = '/';
+                } else {
+                    showAlert(data.detail || 'Google authentication failed.');
+                }
+            } catch (err) {
+                showAlert('Network error during Google sign-in.');
+            }
+        }
+
+        function triggerGoogleLogin() {
+            if (googleConfigured) {
+                // Navigate to real OAuth redirect endpoint
+                window.location.href = '/api/auth/google/login';
+            } else {
+                showAlert("Google OAuth requires GOOGLE_CLIENT_ID in your .env file. You can also sign in with email & password.", true);
+            }
+        }
+
+        async function handleAuth(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const name = document.getElementById('name').value.trim();
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+
+            const endpoint = currentMode === 'register' ? '/api/auth/register' : '/api/auth/login';
+            const payload = currentMode === 'register' ? { email, name, password } : { email, password };
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    window.location.href = '/';
+                } else {
+                    showAlert(data.detail || 'Authentication failed.');
+                }
+            } catch (err) {
+                showAlert('Network error. Check server status.');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
