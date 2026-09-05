@@ -228,6 +228,31 @@ class PolicyEngine:
                 detail = f"No human approval required for this amount."
             ))
 
+        # Check for merchant upsell offer if this is a primary purchase
+        upsell_offer = None
+        if not request.addon_product_id:
+            from src.catalog.service import get_product
+            if request.product_category.lower() in ["chargers"] or request.product_id in ["prod-001", "prod-002", "prod-004", "prod-005"]:
+                cable = get_product(db, "prod-006")
+                if cable and cable.stock_quantity > 0:
+                    upsell_offer = {
+                        "addon_product_id": cable.product_id,
+                        "name": cable.name,
+                        "price_inr": 499.0,
+                        "category": cable.category,
+                        "pitch": "Exclusive bundle: Save ₹300 on this 240W braided cable when purchased with your charger today."
+                    }
+                    log_audit_event(db, {
+                        "event_type": AuditEventType.UPSELL_SUGGESTED,
+                        "agent_id": request.agent_id,
+                        "product_id": cable.product_id,
+                        "amount_inr": 499.0,
+                        "details": {
+                            "primary_product_id": request.product_id,
+                            "pitch": upsell_offer["pitch"]
+                        }
+                    })
+
         # All checks passed - Approve
         log_audit_event(db, {
             "event_type": AuditEventType.POLICY_APPROVED,
@@ -238,6 +263,7 @@ class PolicyEngine:
             "details": {
                 "trace": [c.model_dump() for c in trace],
                 "warnings": warnings,
+                "upsell_included": bool(upsell_offer),
             },
         })
 
@@ -248,6 +274,7 @@ class PolicyEngine:
             remaining_daily_budget_inr = remaining_after,
             requires_human_approval=requires_human,
             warnings=warnings,
+            upsell_offer=upsell_offer,
         )
 
     # Helper Functions
@@ -259,7 +286,41 @@ class PolicyEngine:
         db: Session,
         request: MandateCheckRequest,
     ) -> MandateCheckResult:
-        """Logs rejection to audit trail and returns a rejection result."""
+        """Logs rejection to audit trail and returns a rejection result with a smart alternative if available."""
+        from src.catalog.service import find_alternative_product
+        
+        # Look up mandate to find budget and allowed categories
+        mandate = db.query(AgentMandateRecord).filter(
+            AgentMandateRecord.agent_id == request.agent_id
+        ).first()
+
+        recommended_alt = None
+        if mandate:
+            today_spend = self._get_today_spend(db, request.agent_id)
+            daily_remaining = mandate.max_daily_spend_inr - today_spend
+            effective_budget = min(mandate.max_single_txn_inr, daily_remaining)
+
+            if effective_budget > 0:
+                alt = find_alternative_product(
+                    db=db,
+                    category=request.product_category,
+                    max_price_inr=effective_budget,
+                    exclude_product_id=request.product_id,
+                    allowed_categories=mandate.allowed_categories
+                )
+                if alt:
+                    recommended_alt = {
+                        "product_id": alt.product_id,
+                        "name": alt.name,
+                        "price_inr": alt.price_inr,
+                        "category": alt.category,
+                        "reason": (
+                            f"Original product was rejected ({reason}). "
+                            f"{alt.name} is in stock at ₹{alt.price_inr:,.0f} and fits within "
+                            f"your ₹{effective_budget:,.0f} budget limit."
+                        )
+                    }
+
         log_audit_event(db, {
             "event_type" : AuditEventType.POLICY_REJECTED,
             "agent_id" : request.agent_id,
@@ -268,7 +329,8 @@ class PolicyEngine:
             "policy_decision" : False,
             "details" : {
                 "rejection_reason" : reason,
-                "trace":[c.model_dump() for c in trace]
+                "trace":[c.model_dump() for c in trace],
+                "recommended_alternative": recommended_alt,
             },
         })
 
@@ -279,6 +341,7 @@ class PolicyEngine:
             remaining_daily_budget_inr = None,
             requires_human_approval=False,
             warnings=warnings,
+            recommended_alternative=recommended_alt,
         )
 
     def _get_today_spend(self, db: Session, agent_id: str) -> float:

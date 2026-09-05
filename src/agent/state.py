@@ -23,4 +23,7 @@ class AgentState(TypedDict):
     current_step: str
     final_response: Optional[str]
     error: Optional[str]
+    recovery_attempted: bool
+    recovered_from_rejection: bool
+    recovery_narrative: Optional[str]
 

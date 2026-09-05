@@ -95,6 +95,37 @@ def search_products(
             "agent_id": "System",
             "details": {"query": query, "found": result.total_found, "category": category}
         })
+
+        # Capture Unmet Demand Signals
+        if result.total_found == 0:
+            catalog_service.log_audit_event(db, {
+                "event_type": AuditEventType.DEMAND_SIGNAL,
+                "agent_id": "System",
+                "details": {
+                    "query": query,
+                    "category": category,
+                    "reason": "NO_MATCH",
+                    "signal": f"Zero catalog matches found for query: '{query}'"
+                }
+            })
+        else:
+            for p in result.products:
+                if p.stock_quantity == 0:
+                    catalog_service.log_audit_event(db, {
+                        "event_type": AuditEventType.DEMAND_SIGNAL,
+                        "agent_id": "System",
+                        "product_id": p.product_id,
+                        "amount_inr": p.price_inr,
+                        "details": {
+                            "query": query,
+                            "product_id": p.product_id,
+                            "name": p.name,
+                            "reason": "OUT_OF_STOCK",
+                            "estimated_lost_revenue_inr": p.price_inr,
+                            "signal": f"Out-of-stock query for '{p.name}' (Lost pipeline: ₹{p.price_inr:,.0f})"
+                        }
+                    })
+
         return {
             "query":result.query,
             "total_found":result.total_found,

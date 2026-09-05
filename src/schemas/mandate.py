@@ -49,4 +49,6 @@ class MandateCheckResult(BaseModel):
     )
     requires_human_approval: bool = Field(False)
     warnings: list[str] = Field(default_factory=list)
+    upsell_offer: Optional[dict] = Field(None, description="Merchant add-on offer bundled with approval")
+    recommended_alternative: Optional[dict] = Field(None, description="Compliant alternative if check failed")
     

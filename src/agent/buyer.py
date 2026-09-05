@@ -34,8 +34,13 @@ def get_llm() -> ChatOpenAI:
 
 
 def _route_after_validate(state: AgentState) -> str:
-    """After policy check: go to upsell eval if approved, else skip to respond."""
-    return "evaluate_upsell" if state.get("current_step") == "purchase" else "respond"
+    """After policy check: loop back if recovering, go to upsell eval if approved, else respond."""
+    step = state.get("current_step")
+    if step == "recover":
+        return "validate"
+    elif step == "purchase":
+        return "evaluate_upsell"
+    return "respond"
 
 
 def build_graph(tools: list, llm: ChatOpenAI):
@@ -64,7 +69,7 @@ def build_graph(tools: list, llm: ChatOpenAI):
     graph.add_conditional_edges(
         "validate",
         _route_after_validate,
-        {"evaluate_upsell": "evaluate_upsell", "respond": "respond"},
+        {"validate": "validate", "evaluate_upsell": "evaluate_upsell", "respond": "respond"},
     )
 
     graph.add_edge("evaluate_upsell", "purchase")

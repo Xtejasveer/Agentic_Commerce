@@ -132,3 +132,40 @@ def log_audit_event(db: Session, entry: dict):
     db.add(record)
     db.commit()
     return record.id
+
+def find_alternative_product(
+    db: Session,
+    category: str,
+    max_price_inr: float,
+    exclude_product_id: str | None = None,
+    allowed_categories: list[str] | None = None,
+) -> Product | None:
+    """
+    Finds a compliant, in-stock alternative product when a purchase check fails.
+    Prefers the same category first, or any allowed category within max_price_inr.
+    """
+    query = db.query(ProductRecord).filter(
+        ProductRecord.stock_quantity > 0,
+        ProductRecord.price_inr <= max_price_inr,
+    )
+    if exclude_product_id:
+        query = query.filter(ProductRecord.product_id != exclude_product_id)
+
+    # First try same category
+    same_cat_match = query.filter(
+        func.lower(ProductRecord.category) == category.lower()
+    ).order_by(ProductRecord.price_inr.desc()).first()
+
+    if same_cat_match:
+        return _record_to_product(same_cat_match)
+
+    # Otherwise try any allowed category
+    if allowed_categories:
+        allowed_lower = [c.lower() for c in allowed_categories]
+        other_cat_match = query.filter(
+            func.lower(ProductRecord.category).in_(allowed_lower)
+        ).order_by(ProductRecord.price_inr.desc()).first()
+        if other_cat_match:
+            return _record_to_product(other_cat_match)
+
+    return None

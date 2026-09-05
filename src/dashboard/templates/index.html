@@ -28,11 +28,21 @@
         .audit-card .title { font-weight: bold; margin-bottom: 4px; }
         .audit-card .detail { font-size: 0.9em; color: #555; }
         
+        /* KPI Metrics Header */
+        .kpi-bar { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; padding: 12px 24px; background: #eef2f7; border-bottom: 1px solid #ddd; font-size: 0.85em; }
+        .kpi-box { background: #fff; padding: 10px 14px; border-radius: 6px; border: 1px solid #dcdfe6; }
+        .kpi-title { color: #6c757d; font-weight: 600; font-size: 0.85em; text-transform: uppercase; margin-bottom: 4px; }
+        .kpi-val { font-size: 1.15em; font-weight: bold; color: #212529; }
+        .kpi-sub { font-size: 0.8em; color: #868e96; margin-top: 2px; }
+
         /* Event Colors */
         .card-APPROVED { border-left-color: #28a745; }
         .card-REJECTED { border-left-color: #dc3545; }
         .card-INFO { border-left-color: #17a2b8; }
         .card-SUCCESS { border-left-color: #28a745; background: #e8f5e9; }
+        .card-DEMAND { border-left-color: #fd7e14; background: #fff9f5; }
+        .card-RECOVERED { border-left-color: #6f42c1; background: #fbf9fe; }
+        .card-UPSELL-ACCEPT { border-left-color: #20c997; background: #f0fdf9; }
         
         a { color: #007bff; }
     </style>
@@ -48,7 +58,7 @@
             </select>
         </div>
         <div id="chat-container">
-            <div class="message msg-system">Select an agent and enter a prompt to begin. Try: "Buy me a fast charger under 2000"</div>
+            <div class="message msg-system">Select an agent and enter a prompt to begin. Try: "Buy me a fast charger under 2000" or "Buy the Sony WF-C700N Earbuds"</div>
         </div>
         <div id="input-area">
             <input type="text" id="chat-input" placeholder="Type your request here..." onkeypress="if(event.key === 'Enter') sendChat()">
@@ -62,6 +72,26 @@
             <span>🛡️ Merchant Policy Engine (Live Feed)</span>
             <span style="font-size: 0.8em; color: #666;" id="conn-status">🟡 Connecting...</span>
         </div>
+        
+        <!-- Live Intelligence KPI Bar -->
+        <div class="kpi-bar">
+            <div class="kpi-box">
+                <div class="kpi-title">⚡ Unmet Demand</div>
+                <div class="kpi-val" id="kpi-demand">0 signals</div>
+                <div class="kpi-sub" id="kpi-demand-val">₹0 lost pipeline</div>
+            </div>
+            <div class="kpi-box">
+                <div class="kpi-title">🔄 Recovered Sales</div>
+                <div class="kpi-val" id="kpi-recovered">0 sales</div>
+                <div class="kpi-sub" id="kpi-recovered-val">₹0 saved revenue</div>
+            </div>
+            <div class="kpi-box">
+                <div class="kpi-title">🛍️ Upsell Actions</div>
+                <div class="kpi-val" id="kpi-upsells">0 accepted</div>
+                <div class="kpi-sub" id="kpi-upsells-rej">0 declined</div>
+            </div>
+        </div>
+
         <div id="audit-container">
             <!-- Audit cards will stream here -->
         </div>
@@ -73,6 +103,26 @@
         const inputField = document.getElementById('chat-input');
         const sendBtn = document.getElementById('send-btn');
         const agentSelect = document.getElementById('agent-select');
+
+        async function fetchStats() {
+            try {
+                const res = await fetch('/api/stats');
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('kpi-demand').textContent = `${data.unmet_demand_count} signals`;
+                    document.getElementById('kpi-demand-val').textContent = `₹${data.unmet_demand_revenue_inr.toLocaleString()} lost pipeline`;
+                    document.getElementById('kpi-recovered').textContent = `${data.recovered_sales_count} sales`;
+                    document.getElementById('kpi-recovered-val').textContent = `₹${data.recovered_sales_revenue_inr.toLocaleString()} saved revenue`;
+                    document.getElementById('kpi-upsells').textContent = `${data.upsells_accepted} accepted`;
+                    document.getElementById('kpi-upsells-rej').textContent = `${data.upsells_rejected} declined`;
+                }
+            } catch (err) {
+                console.error('Failed to fetch stats:', err);
+            }
+        }
+
+        // Fetch initial stats on load
+        fetchStats();
 
         function appendMessage(sender, text, isHtml=false) {
             const div = document.createElement('div');
@@ -114,6 +164,7 @@
                 finalTxt = finalTxt.replace(/\n/g, '<br>');
                 
                 appendMessage('agent', finalTxt, true);
+                fetchStats();
             } catch (err) {
                 document.getElementById('typing-indicator').remove();
                 appendMessage('system', 'Error connecting to agent backend.');
@@ -135,13 +186,16 @@
             const data = JSON.parse(e.data);
             if (data.type === 'heartbeat' || data.type === 'connected') return;
 
+            // Update stats whenever a new event comes through
+            fetchStats();
+
             // Format card based on event type
             let colorClass = 'card-INFO';
             let icon = 'ℹ️';
             let title = data.event_type;
             let detail = '';
 
-            const amt = data.amount_inr ? `₹${data.amount_inr}` : '';
+            const amt = data.amount_inr ? `₹${data.amount_inr.toLocaleString()}` : '';
             const prod = data.product_id ? `'${data.product_id}'` : '';
 
             if (data.event_type === 'POLICY_APPROVED') {
@@ -152,16 +206,31 @@
                 detail = data.error_message || data.details?.reason || `Purchase of ${prod} violated agent mandate constraints.`;
             } else if (data.event_type === 'SEARCH') {
                 colorClass = 'card-INFO'; icon = '🔍'; title = 'Catalog Search';
-                detail = `Agent searched for products.`;
+                detail = `Agent searched for products. (${data.details?.found ?? 0} results)`;
             } else if (data.event_type === 'UPSELL_SUGGESTED') {
-                colorClass = 'card-INFO'; icon = '💡'; title = 'Upsell Offered';
-                detail = `Merchant pitched an addon: ${prod}`;
+                colorClass = 'card-INFO'; icon = '💡'; title = 'Upsell Offered by Merchant';
+                detail = data.details?.pitch || `Merchant pitched an addon: ${prod} at ${amt}`;
+            } else if (data.event_type === 'UPSELL_ACCEPTED') {
+                colorClass = 'card-UPSELL-ACCEPT'; icon = '🛍️'; title = 'Upsell Accepted by Agent';
+                detail = data.details?.narration || `Agent bundled addon ${prod} within mandate budget.`;
             } else if (data.event_type === 'UPSELL_REJECTED') {
-                colorClass = 'card-REJECTED'; icon = '❌'; title = 'Upsell Denied by Agent';
+                colorClass = 'card-REJECTED'; icon = '🚫'; title = 'Upsell Declined by Agent';
                 detail = data.details?.narration || `Agent explicitly rejected the upsell offer.`;
+            } else if (data.event_type === 'DEMAND_SIGNAL') {
+                colorClass = 'card-DEMAND'; icon = '⚡'; title = 'Demand Signal Captured';
+                detail = data.details?.signal || `Unmet agent demand captured for query: '${data.details?.query}'`;
+            } else if (data.event_type === 'SALE_RECOVERED') {
+                colorClass = 'card-RECOVERED'; icon = '🔄'; title = 'Sale Recovered by Merchant';
+                detail = data.details?.message || `Recovered rejected transaction with alternative: ${data.details?.alternative_name} at ₹${data.details?.alternative_price_inr?.toLocaleString()}`;
+            } else if (data.event_type === 'STOCK_RESERVED') {
+                colorClass = 'card-INFO'; icon = '📦'; title = 'Stock Reserved';
+                detail = `Reserved stock in PostgreSQL and ChromaDB for ${prod}.`;
+            } else if (data.event_type === 'PAYMENT_INITIATED') {
+                colorClass = 'card-INFO'; icon = '💳'; title = 'Payment Link Generated';
+                detail = `Razorpay checkout link created for ${amt}.`;
             } else if (data.event_type === 'PAYMENT_SUCCESS') {
-                colorClass = 'card-SUCCESS'; icon = '💳'; title = 'Payment Generated';
-                detail = `Razorpay link generated for ${amt}. Awaiting human approval.`;
+                colorClass = 'card-SUCCESS'; icon = '🎉'; title = 'Payment Confirmed';
+                detail = `Payment verified via webhook for ${amt}. Order complete.`;
             }
 
             const card = document.createElement('div');

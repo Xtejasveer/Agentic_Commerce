@@ -255,8 +255,21 @@ def make_evaluate_upsell_node(tools: list, llm):
 
         logger.info(f"[evaluate_upsell_node] Checking for addons for {product.get('product_id')}")
 
-        raw_addon = await suggest_tool.ainvoke({"product_id": product.get("product_id")})
-        addon_data = _parse_mcp_response(raw_addon)
+        # Check if the policy engine already provided an embedded upsell offer
+        mandate_res = state.get("mandate_result") or {}
+        embedded_offer = mandate_res.get("upsell_offer")
+
+        if embedded_offer:
+            addon_data = {
+                "has_addon": True,
+                "addon_product_id": embedded_offer.get("addon_product_id"),
+                "name": embedded_offer.get("name"),
+                "price_inr": embedded_offer.get("price_inr"),
+                "merchant_pitch": embedded_offer.get("pitch"),
+            }
+        else:
+            raw_addon = await suggest_tool.ainvoke({"product_id": product.get("product_id")})
+            addon_data = _parse_mcp_response(raw_addon)
         
         if not isinstance(addon_data, dict) or not addon_data.get("has_addon"):
             return {}
@@ -421,10 +434,58 @@ def make_validate_node(tools: list):
         else:
             trace = mandate_result.get("decision_trace", [])
             failed = next((c for c in reversed(trace) if not c.get("passed")), {})
+            error_detail = f"{reason}: {failed.get('detail', '')}"
+
+            alt = mandate_result.get("recommended_alternative")
+            if alt and not state.get("recovery_attempted"):
+                logger.info(f"[validate_node] Policy failed, but merchant proposed alternative: {alt.get('name')}")
+                
+                # Log SALE_RECOVERED audit entry
+                try:
+                    from src.database.session import SessionLocal
+                    from src.catalog.service import log_audit_event
+                    from src.schemas.audit import AuditEventType
+                    
+                    db = SessionLocal()
+                    try:
+                        log_audit_event(db, {
+                            "event_type": AuditEventType.SALE_RECOVERED,
+                            "agent_id": state["agent_id"],
+                            "product_id": alt["product_id"],
+                            "amount_inr": alt["price_inr"],
+                            "details": {
+                                "original_product_id": product_id,
+                                "original_reason": reason,
+                                "alternative_name": alt["name"],
+                                "alternative_price_inr": alt["price_inr"],
+                                "recovery_reason": alt.get("reason"),
+                            }
+                        })
+                    finally:
+                        db.close()
+                except Exception as e:
+                    logger.error(f"Failed to log recovery event: {e}")
+
+                recovery_msg = f"🔄 Mandate failed ({reason}). Recovered transaction with merchant alternative: {alt['name']} at ₹{alt['price_inr']:,.0f}"
+                return {
+                    "selected_product": {
+                        "product_id": alt["product_id"],
+                        "name": alt["name"],
+                        "price_inr": alt["price_inr"],
+                        "category": alt.get("category", category)
+                    },
+                    "recovery_attempted": True,
+                    "recovered_from_rejection": True,
+                    "recovery_narrative": alt.get("reason", recovery_msg),
+                    "mandate_result": mandate_result,
+                    "current_step": "recover",
+                    "messages": [AIMessage(content=recovery_msg)]
+                }
+
             return {
                 "mandate_result": mandate_result,
                 "current_step": "failed",
-                "error": f"{reason}: {failed.get('detail', '')}",
+                "error": error_detail,
                 "messages": [AIMessage(
                     content=f"Purchase rejected by policy engine.\nReason: {reason}"
                 )],
@@ -463,22 +524,24 @@ def make_purchase_node(tools: list):
         if not isinstance(result, dict):
             result = {}
 
-        success = result.get("success", False)
-        logger.info(f"[purchase_node] Result: success = {success}")
-
-        if success:
+        if result.get("success"):
             return {
                 "purchase_result": result,
                 "current_step": "done",
-                "messages": [AIMessage(content="✅ Order created. Payment link generated.")],
+                "messages": [AIMessage(
+                    content=(
+                        f"Order placed! Order ID: {result.get('order_id')}\n"
+                        f"Razorpay link: {result.get('payment_link_url')}"
+                    )
+                )],
             }
-
-        return {
-            "purchase_result": result,
-            "current_step": "failed",
-            "error": result.get("error_message", "Purchase failed"),
-            "messages": [AIMessage(content=f"Purchase failed: {result.get('error_message')}")],
-        }
+        else:
+            return {
+                "purchase_result": result,
+                "current_step": "failed",
+                "error": result.get("error_message", "Purchase execution failed"),
+                "messages": [AIMessage(content=f"Purchase failed: {result.get('error_message')}")],
+            }
 
     return purchase_node
 
@@ -495,8 +558,12 @@ def make_respond_node():
             return {"final_response": state.get("final_response", "I can help you find products.")}
         elif step == "done":
             result = state.get("purchase_result", {})
+            recovery_prefix = ""
+            if state.get("recovered_from_rejection"):
+                recovery_prefix = f"🔄 **Sale Recovered!** {state.get('recovery_narrative', '')}\n\n"
+
             response = (
-                f"✅ Order placed successfully!\n\n"
+                f"{recovery_prefix}✅ Order placed successfully!\n\n"
                 f"📦 Product:       {result.get('product_name')}\n"
                 f"🔢 Quantity:      {result.get('quantity')}\n"
                 f"💰 Total:         ₹{result.get('total_amount_inr', 0):,.2f}\n"

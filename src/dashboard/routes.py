@@ -103,6 +103,52 @@ def get_audit_trail(
         "entries": [_format_audit(r) for r in records]
     }
 
+@router.get("/stats")
+def get_dashboard_stats(db: Session = Depends(get_db)):
+    """
+    Returns aggregated business intelligence metrics:
+    - Unmet demand signals (count & estimated lost pipeline)
+    - Recovered sales (count & recovered revenue)
+    - Upsell metrics (accepted vs rejected count)
+    """
+    from sqlalchemy import func
+    
+    # Demand signals
+    demand_count = db.query(func.count(AuditLogRecord.id)).filter(
+        AuditLogRecord.event_type == "DEMAND_SIGNAL"
+    ).scalar() or 0
+    
+    unmet_revenue = db.query(func.coalesce(func.sum(AuditLogRecord.amount_inr), 0)).filter(
+        AuditLogRecord.event_type == "DEMAND_SIGNAL"
+    ).scalar() or 0.0
+
+    # Recovered sales
+    recovered_count = db.query(func.count(AuditLogRecord.id)).filter(
+        AuditLogRecord.event_type == "SALE_RECOVERED"
+    ).scalar() or 0
+
+    recovered_revenue = db.query(func.coalesce(func.sum(AuditLogRecord.amount_inr), 0)).filter(
+        AuditLogRecord.event_type == "SALE_RECOVERED"
+    ).scalar() or 0.0
+
+    # Upsells
+    upsells_accepted = db.query(func.count(AuditLogRecord.id)).filter(
+        AuditLogRecord.event_type == "UPSELL_ACCEPTED"
+    ).scalar() or 0
+
+    upsells_rejected = db.query(func.count(AuditLogRecord.id)).filter(
+        AuditLogRecord.event_type == "UPSELL_REJECTED"
+    ).scalar() or 0
+
+    return {
+        "unmet_demand_count": demand_count,
+        "unmet_demand_revenue_inr": float(unmet_revenue),
+        "recovered_sales_count": recovered_count,
+        "recovered_sales_revenue_inr": float(recovered_revenue),
+        "upsells_accepted": upsells_accepted,
+        "upsells_rejected": upsells_rejected,
+    }
+
 @router.get("/audit/stream")
 async def stream_audit_events(request: Request):
     """
