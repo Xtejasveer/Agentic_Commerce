@@ -1,5 +1,7 @@
 # 🛒 VendIQ: AI-Native Merchant Infrastructure
 
+![VendIQ - Commerce that runs itself](assets/vendiq_hero.png)
+
 > **An autonomous Agent-to-Merchant transaction platform powered by the Model Context Protocol (MCP), LangGraph, FastAPI, PostgreSQL, and ChromaDB.**
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
